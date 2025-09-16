@@ -116,14 +116,16 @@ function saveStatusHistorySnapshot(array $snapshot): void
 
         $historyCount = count($history);
         $minInterval = max((int) $config['minInterval'], 0);
+        $historyChanged = false;
+
         if ($historyCount > 0) {
             $lastEntry = $history[$historyCount - 1];
-            $shouldReplaceLastEntry = false;
+            $replacementReason = null;
 
             if (isset($lastEntry['generatedAt'], $entry['generatedAt'])
                 && $lastEntry['generatedAt'] === $entry['generatedAt']
             ) {
-                $shouldReplaceLastEntry = true;
+                $replacementReason = 'generatedAt';
             } elseif ($minInterval > 0) {
                 $lastTimestamp = historyEntryTimestamp($lastEntry);
                 $currentTimestamp = historyEntryTimestamp($entry);
@@ -131,20 +133,33 @@ function saveStatusHistorySnapshot(array $snapshot): void
                 if ($lastTimestamp !== null && $currentTimestamp !== null
                     && ($currentTimestamp - $lastTimestamp) < $minInterval
                 ) {
-                    $shouldReplaceLastEntry = true;
+                    $replacementReason = 'minInterval';
                 }
             }
 
-            if ($shouldReplaceLastEntry) {
-                $history[$historyCount - 1] = $entry;
+            if ($replacementReason === 'generatedAt') {
+                if ($lastEntry !== $entry) {
+                    $history[$historyCount - 1] = $entry;
+                    $historyChanged = true;
+                }
+            } elseif ($replacementReason === 'minInterval') {
+                return;
             } else {
                 $history[] = $entry;
+                $historyChanged = true;
             }
         } else {
             $history[] = $entry;
+            $historyChanged = true;
         }
 
+        $historyBeforeRotation = $history;
         $history = applyHistoryRotation($history, $config['maxEntries'], $config['maxAge']);
+        $rotationOccurred = $history !== $historyBeforeRotation;
+
+        if (!$historyChanged && !$rotationOccurred) {
+            return;
+        }
 
         $encoded = json_encode($history, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($encoded === false) {
