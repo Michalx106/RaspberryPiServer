@@ -1,0 +1,8 @@
+# PHP / web
+vendor/
+node_modules/
+.env
+*.log
+.cache/
+.DS_Store
+Thumbs.db
