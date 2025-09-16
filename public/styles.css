@@ -191,3 +191,38 @@ footer {
   opacity: 0.85;
   transform: none;
 }
+.history-container {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #d8e2f1;
+}
+
+.history-container h3 {
+  margin: 0 0 12px;
+  color: #0b5394;
+  font-size: 18px;
+}
+
+.history-chart {
+  position: relative;
+  height: 240px;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 12px;
+  display: none;
+}
+
+.history-chart.is-visible {
+  display: block;
+}
+
+.history-chart canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.history-empty {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #6b7688;
+}
