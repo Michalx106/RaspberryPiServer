@@ -27,7 +27,7 @@ $time = date("H:i:s");
   <p>Ta strona działa na <strong>Raspberry Pi + Nginx + PHP</strong>.</p>
   <p>Aktualny czas serwera to: <strong><?php echo $time; ?></strong></p>
   <footer>
-    &copy; <?php echo date("Y"); ?> Moja strona
+    &copy; <?php echo date("Y"); ?> Michał Grzesiewicz
   </footer>
 </body>
 </html>
