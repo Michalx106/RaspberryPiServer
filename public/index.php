@@ -113,6 +113,9 @@ $serviceStatuses = $snapshot['services'];
     </p>
 
     <div class="panel-footer">
+      <div class="theme-toggle">
+        <button type="button" data-role="theme-toggle" aria-pressed="false">Włącz tryb ciemny</button>
+      </div>
       <div class="status-refresh" data-role="refresh-container">
         <span data-role="refresh-label">Ostatnie odświeżenie: <?= h($snapshot['generatedAt']); ?></span>
         <button type="button" data-role="refresh-button">Odśwież teraz</button>
@@ -148,6 +151,65 @@ $serviceStatuses = $snapshot['services'];
         historyChartWrapper: document.querySelector('[data-role="history-chart-wrapper"]'),
         historyChart: document.querySelector('[data-role="history-chart"]'),
         historyEmpty: document.querySelector('[data-role="history-empty"]'),
+        themeToggle: document.querySelector('[data-role="theme-toggle"]'),
+      };
+
+      const THEME_STORAGE_KEY = 'theme-preference';
+
+      const readThemePreference = () => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return null;
+          }
+          return window.localStorage.getItem(THEME_STORAGE_KEY);
+        } catch (error) {
+          return null;
+        }
+      };
+
+      const writeThemePreference = (value) => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return;
+          }
+          window.localStorage.setItem(THEME_STORAGE_KEY, value);
+        } catch (error) {
+          // Ignorujemy błędy zapisu (np. tryb prywatny)
+        }
+      };
+
+      const updateThemeToggle = (isDark) => {
+        if (!elements.themeToggle) {
+          return;
+        }
+        elements.themeToggle.textContent = isDark ? 'Tryb ciemny włączony' : 'Włącz tryb ciemny';
+        elements.themeToggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+      };
+
+      const applyThemePreference = (isDark, persist = false) => {
+        document.body.classList.toggle('theme-dark', isDark);
+        updateThemeToggle(isDark);
+        if (persist) {
+          writeThemePreference(isDark ? 'dark' : 'light');
+        }
+      };
+
+      const initializeTheme = () => {
+        const storedPreference = readThemePreference();
+        let isDark = storedPreference === 'dark';
+
+        if (storedPreference !== 'dark' && storedPreference !== 'light') {
+          if (window.matchMedia && typeof window.matchMedia === 'function') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+            if (prefersDark && typeof prefersDark.matches === 'boolean') {
+              isDark = prefersDark.matches;
+            }
+          } else {
+            isDark = document.body.classList.contains('theme-dark');
+          }
+        }
+
+        applyThemePreference(isDark, storedPreference !== 'dark' && storedPreference !== 'light');
       };
 
       const supportsFetch = typeof window.fetch === 'function';
@@ -950,6 +1012,15 @@ $serviceStatuses = $snapshot['services'];
           scheduleReconnect();
         });
       };
+
+      if (elements.themeToggle) {
+        elements.themeToggle.addEventListener('click', () => {
+          const isDark = !document.body.classList.contains('theme-dark');
+          applyThemePreference(isDark, true);
+        });
+      }
+
+      initializeTheme();
 
       if (elements.refreshButton) {
         elements.refreshButton.addEventListener('click', () => {

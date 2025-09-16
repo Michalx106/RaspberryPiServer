@@ -2,6 +2,14 @@
 
 Prosty panel statusu dla Raspberry Pi napisany w PHP.
 
+## Tryb ciemny
+
+Interfejs panelu posiada przełącznik trybu ciemnego umieszczony w stopce sekcji
+„Panel stanu Raspberry Pi”. Kliknięcie przycisku natychmiast przełącza klasę
+`theme-dark` na elemencie `<body>` i zapisuje wybrany wariant kolorystyczny w
+`localStorage` przeglądarki. Dzięki temu kolejne odwiedziny automatycznie
+korzystają z ostatnio wybranego motywu.
+
 ## Ochrona dostępu (HTTP Basic Auth)
 
 Aplikacja może być chroniona prostą autoryzacją HTTP Basic. Dane logowania są pobierane
