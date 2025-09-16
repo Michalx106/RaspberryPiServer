@@ -4,7 +4,13 @@ declare(strict_types=1);
 /**
  * Zwraca konfigurację modułu historii stanu.
  *
- * @return array{enabled: bool, path: string, maxEntries: int, maxAge: int|null}
+ * @return array{
+ *     enabled: bool,
+ *     path: string,
+ *     maxEntries: int,
+ *     maxAge: int|null,
+ *     minInterval: int,
+ * }
  */
 function getStatusHistoryConfig(): array
 {
@@ -28,6 +34,15 @@ function getStatusHistoryConfig(): array
         ? max((int) $maxEntriesEnv, 0)
         : 360;
 
+    $minIntervalEnv = getenv('APP_HISTORY_MIN_INTERVAL');
+    $minInterval = 60;
+    if (is_string($minIntervalEnv) && is_numeric($minIntervalEnv)) {
+        $minIntervalValue = (int) $minIntervalEnv;
+        if ($minIntervalValue >= 0) {
+            $minInterval = $minIntervalValue;
+        }
+    }
+
     $maxAgeEnv = getenv('APP_HISTORY_MAX_AGE');
     $maxAge = null;
     if (is_string($maxAgeEnv) && is_numeric($maxAgeEnv)) {
@@ -42,6 +57,7 @@ function getStatusHistoryConfig(): array
         'path' => $path,
         'maxEntries' => $maxEntries,
         'maxAge' => $maxAge,
+        'minInterval' => $minInterval,
     ];
 
     return $config;
@@ -99,11 +115,27 @@ function saveStatusHistorySnapshot(array $snapshot): void
         }
 
         $historyCount = count($history);
+        $minInterval = max((int) $config['minInterval'], 0);
         if ($historyCount > 0) {
             $lastEntry = $history[$historyCount - 1];
+            $shouldReplaceLastEntry = false;
+
             if (isset($lastEntry['generatedAt'], $entry['generatedAt'])
                 && $lastEntry['generatedAt'] === $entry['generatedAt']
             ) {
+                $shouldReplaceLastEntry = true;
+            } elseif ($minInterval > 0) {
+                $lastTimestamp = historyEntryTimestamp($lastEntry);
+                $currentTimestamp = historyEntryTimestamp($entry);
+
+                if ($lastTimestamp !== null && $currentTimestamp !== null
+                    && ($currentTimestamp - $lastTimestamp) < $minInterval
+                ) {
+                    $shouldReplaceLastEntry = true;
+                }
+            }
+
+            if ($shouldReplaceLastEntry) {
                 $history[$historyCount - 1] = $entry;
             } else {
                 $history[] = $entry;
