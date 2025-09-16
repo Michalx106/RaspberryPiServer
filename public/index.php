@@ -269,14 +269,16 @@ $serviceStatuses = $snapshot['services'];
         }
 
         if (elements.refreshLabel) {
-          if (customText) {
+          if (typeof customText === 'string' && customText.trim() !== '') {
             elements.refreshLabel.textContent = customText;
             return;
           }
 
-          const timestamp = new Date().toLocaleTimeString();
-          const prefix = manual ? 'Ręczne odświeżenie' : 'Ostatnie odświeżenie';
-          elements.refreshLabel.textContent = `${prefix}: ${timestamp}`;
+          if (loading) {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = manual ? 'Trwa ręczne odświeżanie' : 'Trwa odświeżanie';
+            elements.refreshLabel.textContent = `${prefix} (${timestamp})...`;
+          }
         }
       };
 
