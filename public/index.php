@@ -1,220 +1,23 @@
 <?php
-// Prosty przykład dynamicznej strony rozbudowany o panel stanu urządzenia.
+declare(strict_types=1);
 
-// Ustaw domyślną strefę czasową (możesz ją zmienić na własną).
-date_default_timezone_set('Europe/Warsaw');
+require_once __DIR__ . '/../src/bootstrap.php';
 
-$time = date("H:i:s");
+/** @var array<string, string> $servicesToCheck */
+$servicesToCheck = require __DIR__ . '/../config/services.php';
 
-/**
- * Bezpieczne escapowanie ciągów znaków do HTML.
- */
-function h(?string $value): string
-{
-    return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+$statusParam = isset($_GET['status']) ? (string) $_GET['status'] : null;
+if (handleStatusRequest($statusParam, $servicesToCheck)) {
+    return;
 }
 
-/**
- * Odczytuje temperaturę CPU Raspberry Pi (w stopniach Celsjusza).
- */
-function getCpuTemperature(): ?string
-{
-    $thermalPaths = [
-        '/sys/class/thermal/thermal_zone0/temp',
-        '/sys/devices/virtual/thermal/thermal_zone0/temp',
-    ];
+$snapshot = collectStatusSnapshot($servicesToCheck);
 
-    foreach ($thermalPaths as $path) {
-        if (is_readable($path)) {
-            $raw = trim((string) @file_get_contents($path));
-            if ($raw !== '' && is_numeric($raw)) {
-                $temperature = (float) $raw;
-                if ($temperature > 1000) {
-                    $temperature /= 1000;
-                }
-
-                return number_format($temperature, 1, '.', ' ') . ' °C';
-            }
-        }
-    }
-
-    $commandOutput = @shell_exec('vcgencmd measure_temp 2>/dev/null');
-    if ($commandOutput && preg_match('/temp=([\d\.]+)/', $commandOutput, $matches)) {
-        $temperature = (float) $matches[1];
-        return number_format($temperature, 1, '.', ' ') . ' °C';
-    }
-
-    return null;
-}
-
-/**
- * Zwraca średnie obciążenie systemu (1, 5, 15 minut).
- */
-function getSystemLoad(): ?string
-{
-    if (!function_exists('sys_getloadavg')) {
-        return null;
-    }
-
-    $load = sys_getloadavg();
-    if (!is_array($load) || count($load) < 3) {
-        return null;
-    }
-
-    return sprintf('1 min: %.2f • 5 min: %.2f • 15 min: %.2f', $load[0], $load[1], $load[2]);
-}
-
-/**
- * Zamienia ilość sekund na prostą reprezentację tekstową.
- */
-function formatDuration(int $seconds): string
-{
-    $days = intdiv($seconds, 86400);
-    $seconds %= 86400;
-    $hours = intdiv($seconds, 3600);
-    $seconds %= 3600;
-    $minutes = intdiv($seconds, 60);
-
-    $parts = [];
-    if ($days > 0) {
-        $parts[] = $days . ' d';
-    }
-    if ($hours > 0) {
-        $parts[] = $hours . ' h';
-    }
-    if ($minutes > 0) {
-        $parts[] = $minutes . ' min';
-    }
-    if (empty($parts)) {
-        $parts[] = 'mniej niż minuta';
-    }
-
-    return implode(' ', $parts);
-}
-
-/**
- * Odczytuje czas działania systemu.
- */
-function getUptime(): ?string
-{
-    $output = @shell_exec('uptime -p 2>/dev/null');
-    if ($output) {
-        return trim($output);
-    }
-
-    $uptimeFile = '/proc/uptime';
-    if (is_readable($uptimeFile)) {
-        $contents = trim((string) @file_get_contents($uptimeFile));
-        if ($contents !== '') {
-            $parts = explode(' ', $contents);
-            if (isset($parts[0]) && is_numeric($parts[0])) {
-                return formatDuration((int) $parts[0]);
-            }
-        }
-    }
-
-    return null;
-}
-
-/**
- * Zwraca status usługi systemd.
- *
- * @return array{label: string, service: string, status: string, class: string, details: string|null}
- */
-function getServiceStatus(string $service, string $label): array
-{
-    $output = [];
-    $returnCode = 0;
-    $command = sprintf('systemctl is-active %s 2>&1', escapeshellarg($service));
-    @exec($command, $output, $returnCode);
-
-    $firstLine = strtolower(trim($output[0] ?? ''));
-    $fullOutput = trim(implode(' ', $output));
-
-    $statusLabel = 'Nieznany';
-    $cssClass = 'status-unknown';
-
-    switch ($firstLine) {
-        case 'active':
-            $statusLabel = 'Aktywna';
-            $cssClass = 'status-ok';
-            break;
-        case 'inactive':
-            $statusLabel = 'Nieaktywna';
-            $cssClass = 'status-off';
-            break;
-        case 'failed':
-            $statusLabel = 'Błąd';
-            $cssClass = 'status-error';
-            break;
-        case 'activating':
-            $statusLabel = 'Uruchamianie';
-            $cssClass = 'status-warn';
-            break;
-        case 'deactivating':
-            $statusLabel = 'Zatrzymywanie';
-            $cssClass = 'status-warn';
-            break;
-        default:
-            if ($fullOutput !== '') {
-                if (stripos($fullOutput, 'System has not been booted with systemd') !== false) {
-                    $statusLabel = 'Brak systemd';
-                    $cssClass = 'status-warn';
-                } elseif (stripos($fullOutput, 'not found') !== false) {
-                    $statusLabel = 'Nie znaleziono usługi';
-                    $cssClass = 'status-off';
-                } elseif (stripos($fullOutput, 'command not found') !== false) {
-                    $statusLabel = 'Polecenie niedostępne';
-                    $cssClass = 'status-warn';
-                } else {
-                    $statusLabel = $fullOutput;
-                }
-            }
-            break;
-    }
-
-    return [
-        'label' => $label,
-        'service' => $service,
-        'status' => $statusLabel,
-        'class' => $cssClass,
-        'details' => $fullOutput !== '' ? $fullOutput : null,
-    ];
-}
-
-$cpuTemperature = getCpuTemperature();
-$systemLoad = getSystemLoad();
-$uptime = getUptime();
-
-$servicesToCheck = [
-    'ssh' => 'SSH',
-    'nginx' => 'Nginx',
-    'php-fpm' => 'PHP-FPM',
-];
-
-$serviceStatuses = [];
-foreach ($servicesToCheck as $service => $label) {
-    $serviceStatuses[] = getServiceStatus($service, $label);
-}
-
-if (isset($_GET['status']) && $_GET['status'] === 'json') {
-    header('Content-Type: application/json; charset=UTF-8');
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-
-    echo json_encode(
-        [
-            'time' => $time,
-            'generatedAt' => date(DATE_ATOM),
-            'cpuTemperature' => $cpuTemperature,
-            'systemLoad' => $systemLoad,
-            'uptime' => $uptime,
-            'services' => $serviceStatuses,
-        ],
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
-    exit;
-}
+$time = $snapshot['time'];
+$cpuTemperature = $snapshot['cpuTemperature'];
+$systemLoad = $snapshot['systemLoad'];
+$uptime = $snapshot['uptime'];
+$serviceStatuses = $snapshot['services'];
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -388,7 +191,7 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
   <h1>Witaj na mojej stronie! 🎉</h1>
   <p>Ta strona działa na <strong>Raspberry Pi + Nginx + PHP</strong>.</p>
 
-  <p>Aktualny czas serwera to: <strong><?= h($time); ?></strong></p>
+  <p>Aktualny czas serwera to: <strong data-role="server-time"><?= h($time); ?></strong></p>
 
   <section class="status-panel">
     <h2>Panel stanu Raspberry Pi</h2>
@@ -407,10 +210,15 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
       </div>
     </div>
 
-    <h3>Status usług</h3>
-    <ul class="service-list">
+    <ul class="service-list" data-role="service-list">
       <?php foreach ($serviceStatuses as $service): ?>
-        <li class="service-item <?= h($service['class']); ?>"<?php if (!empty($service['details'])): ?> title="<?= h($service['details']); ?>"<?php endif; ?>>
+        <?php
+          $cssClass = trim((string) ($service['class'] ?? ''));
+          if ($cssClass === '') {
+              $cssClass = 'status-unknown';
+          }
+        ?>
+        <li class="service-item <?= h($cssClass); ?>"<?= isset($service['details']) && $service['details'] !== null ? ' title="' . h($service['details']) . '"' : ''; ?>>
           <span class="service-name">
             <?= h($service['label']); ?>
             <small><?= h($service['service']); ?></small>
@@ -420,104 +228,94 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
       <?php endforeach; ?>
     </ul>
 
+    <p class="status-note">
+      Dane odświeżają się automatycznie. W przypadku problemów spróbuj kliknąć przycisk poniżej.
+    </p>
+
     <div class="panel-footer">
-      <p class="status-note">Dostosuj listę monitorowanych usług w tablicy <code>$servicesToCheck</code>, aby dopasować panel do swojej instalacji.</p>
-      <p class="status-refresh" data-role="refresh-container">
-        <span data-role="refresh-label">Ostatnia aktualizacja (czas serwera): <?= h($time); ?> • auto co 15 s</span>
+      <div class="status-refresh" data-role="refresh-container">
+        <span data-role="refresh-label">Ostatnie odświeżenie: <?= h($snapshot['generatedAt']); ?></span>
         <button type="button" data-role="refresh-button">Odśwież teraz</button>
-      </p>
+      </div>
     </div>
   </section>
 
   <footer>
-    &copy; <?= h(date("Y")); ?> Michał Grzesiewicz
+    <p>Miłego dnia! 😊</p>
   </footer>
+
   <script>
     (function () {
+      const STATUS_JSON_ENDPOINT = '?status=json';
+      const STATUS_STREAM_ENDPOINT = '?status=stream';
       const REFRESH_INTERVAL = 15000;
-
-      const fallback = (value) => {
-        if (value === null || value === undefined) {
-          return 'Brak danych';
-        }
-
-        if (typeof value === 'string') {
-          const trimmed = value.trim();
-          return trimmed === '' ? 'Brak danych' : trimmed;
-        }
-
-        return value;
-      };
+      const STREAM_RECONNECT_DELAY = 5000;
 
       const elements = {
         time: document.querySelector('[data-role="server-time"]'),
         cpuTemperature: document.querySelector('[data-role="cpu-temperature"]'),
         systemLoad: document.querySelector('[data-role="system-load"]'),
         uptime: document.querySelector('[data-role="uptime"]'),
-        serviceList: document.querySelector('.service-list'),
+        serviceList: document.querySelector('[data-role="service-list"]'),
         refreshLabel: document.querySelector('[data-role="refresh-label"]'),
         refreshButton: document.querySelector('[data-role="refresh-button"]'),
         refreshContainer: document.querySelector('[data-role="refresh-container"]'),
       };
 
-      if (!elements.refreshContainer) {
-        return;
-      }
-
-      if (!('fetch' in window)) {
-        if (elements.refreshLabel) {
-          elements.refreshLabel.textContent = 'Twoja przeglądarka nie obsługuje automatycznego odświeżania panelu.';
-        }
-        if (elements.refreshButton) {
-          elements.refreshButton.disabled = true;
-          elements.refreshButton.textContent = 'Odświeżanie niedostępne';
-        }
-        return;
-      }
+      const supportsFetch = typeof window.fetch === 'function';
+      const supportsEventSource = typeof window.EventSource === 'function';
 
       let refreshTimer = null;
+      let eventSource = null;
+      let reconnectTimer = null;
       let isFetching = false;
 
-      const setFetchingState = (isActive, manual = false) => {
+      const fallback = (value, fallbackValue = 'Brak danych') => {
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          return trimmed !== '' ? trimmed : fallbackValue;
+        }
+        return fallbackValue;
+      };
+
+      const setFetchingState = (loading, manual = false, customText = null) => {
+        if (!elements.refreshContainer) {
+          return;
+        }
+
+        if (loading) {
+          elements.refreshContainer.classList.add('is-loading');
+        } else {
+          elements.refreshContainer.classList.remove('is-loading');
+        }
+
         if (elements.refreshButton) {
-          elements.refreshButton.disabled = isActive;
-          elements.refreshButton.textContent = isActive ? 'Odświeżanie...' : 'Odśwież teraz';
+          elements.refreshButton.disabled = loading;
         }
 
-        if (elements.refreshContainer) {
-          elements.refreshContainer.classList.toggle('is-loading', isActive);
-          if (isActive) {
-            elements.refreshContainer.classList.remove('has-error');
+        if (elements.refreshLabel) {
+          if (customText) {
+            elements.refreshLabel.textContent = customText;
+            return;
           }
-        }
 
-        if (isActive && elements.refreshLabel) {
-          elements.refreshLabel.textContent = manual
-            ? 'Ręczne odświeżanie danych...'
-            : 'Aktualizowanie danych panelu...';
+          const timestamp = new Date().toLocaleTimeString();
+          const prefix = manual ? 'Ręczne odświeżenie' : 'Ostatnie odświeżenie';
+          elements.refreshLabel.textContent = `${prefix}: ${timestamp}`;
         }
       };
 
-      const updateLabelSuccess = (generatedAt, serverTime) => {
+      const updateLabelSuccess = (generatedAt, serverTime, mode) => {
         if (!elements.refreshLabel) {
           return;
         }
 
-        const intervalInfo = `auto co ${Math.round(REFRESH_INTERVAL / 1000)} s`;
-        let timeInfo = '';
+        const timestamp = generatedAt
+          ? new Date(generatedAt).toLocaleTimeString()
+          : new Date().toLocaleTimeString();
 
-        if (generatedAt) {
-          const parsed = new Date(generatedAt);
-          if (!Number.isNaN(parsed.getTime())) {
-            timeInfo = `Ostatnia aktualizacja: ${parsed.toLocaleTimeString()} (czas lokalny)`;
-          }
-        }
-
-        if (!timeInfo && serverTime && serverTime !== 'Brak danych') {
-          timeInfo = `Ostatnia aktualizacja (czas serwera): ${serverTime}`;
-        }
-
-        elements.refreshLabel.textContent = [timeInfo || 'Ostatnia aktualizacja przed chwilą', intervalInfo].join(' • ');
+        const modeLabel = mode === 'stream' ? 'tryb na żywo' : (mode === 'poll' ? 'tryb zapasowy' : 'odświeżenie');
+        elements.refreshLabel.textContent = `Ostatnia aktualizacja (${modeLabel}): ${timestamp}${serverTime ? ` (czas serwera: ${serverTime})` : ''}`;
       };
 
       const renderServices = (services) => {
@@ -569,8 +367,40 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
         elements.serviceList.appendChild(fragment);
       };
 
+      const applySnapshot = (data, mode = 'stream') => {
+        if (!data || typeof data !== 'object') {
+          return;
+        }
+
+        const serverTime = fallback(data.time ?? null);
+
+        if (elements.time) {
+          elements.time.textContent = serverTime;
+        }
+
+        if (elements.cpuTemperature) {
+          elements.cpuTemperature.textContent = fallback(data.cpuTemperature ?? null);
+        }
+
+        if (elements.systemLoad) {
+          elements.systemLoad.textContent = fallback(data.systemLoad ?? null);
+        }
+
+        if (elements.uptime) {
+          elements.uptime.textContent = fallback(data.uptime ?? null);
+        }
+
+        renderServices(data.services);
+
+        updateLabelSuccess(data.generatedAt ?? null, serverTime, mode);
+
+        if (elements.refreshContainer) {
+          elements.refreshContainer.classList.remove('has-error');
+        }
+      };
+
       const loadStatus = async (manual = false) => {
-        if (isFetching) {
+        if (!supportsFetch || isFetching) {
           return;
         }
 
@@ -578,8 +408,8 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
         setFetchingState(true, manual);
 
         try {
-          const response = await fetch('?status=json', {
-            headers: { 'Accept': 'application/json' },
+          const response = await fetch(STATUS_JSON_ENDPOINT, {
+            headers: { Accept: 'application/json' },
             cache: 'no-store',
           });
 
@@ -588,26 +418,11 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
           }
 
           const data = await response.json();
+          const mode = manual
+            ? (supportsEventSource && eventSource ? 'stream' : 'manual')
+            : (supportsEventSource && eventSource ? 'stream' : 'poll');
 
-          if (elements.time) {
-            elements.time.textContent = fallback(data.time);
-          }
-
-          if (elements.cpuTemperature) {
-            elements.cpuTemperature.textContent = fallback(data.cpuTemperature);
-          }
-
-          if (elements.systemLoad) {
-            elements.systemLoad.textContent = fallback(data.systemLoad);
-          }
-
-          if (elements.uptime) {
-            elements.uptime.textContent = fallback(data.uptime);
-          }
-
-          renderServices(data.services);
-
-          updateLabelSuccess(data.generatedAt ?? null, fallback(data.time));
+          applySnapshot(data, mode);
         } catch (error) {
           if (elements.refreshContainer) {
             elements.refreshContainer.classList.add('has-error');
@@ -624,24 +439,139 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
         }
       };
 
+      const stopPolling = () => {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+      };
+
+      const startPolling = () => {
+        if (!supportsFetch || refreshTimer) {
+          return;
+        }
+
+        loadStatus();
+        refreshTimer = window.setInterval(() => loadStatus(), REFRESH_INTERVAL);
+      };
+
+      const cancelReconnect = () => {
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+      };
+
+      const stopStream = () => {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        cancelReconnect();
+      };
+
+      const scheduleReconnect = () => {
+        if (reconnectTimer) {
+          return;
+        }
+
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          startStream();
+        }, STREAM_RECONNECT_DELAY);
+      };
+
+      const startStream = () => {
+        if (!supportsEventSource) {
+          if (supportsFetch) {
+            startPolling();
+          }
+          return;
+        }
+
+        stopStream();
+        stopPolling();
+
+        if (elements.refreshContainer) {
+          elements.refreshContainer.classList.remove('has-error');
+        }
+
+        setFetchingState(true, false, 'Łączenie ze strumieniem danych...');
+
+        eventSource = new EventSource(STATUS_STREAM_ENDPOINT);
+
+        const handleStatusEvent = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            applySnapshot(data, 'stream');
+            setFetchingState(false);
+            stopPolling();
+          } catch (parseError) {
+            if (elements.refreshContainer) {
+              elements.refreshContainer.classList.add('has-error');
+            }
+            if (elements.refreshLabel) {
+              const timestamp = new Date().toLocaleTimeString();
+              elements.refreshLabel.textContent = `Błąd danych strumienia (${timestamp})`;
+            }
+          }
+        };
+
+        eventSource.addEventListener('status', handleStatusEvent);
+        eventSource.addEventListener('message', handleStatusEvent);
+
+        eventSource.addEventListener('open', () => {
+          setFetchingState(false);
+        });
+
+        eventSource.addEventListener('error', () => {
+          setFetchingState(false);
+          if (elements.refreshContainer) {
+            elements.refreshContainer.classList.add('has-error');
+          }
+          if (elements.refreshLabel) {
+            const timestamp = new Date().toLocaleTimeString();
+            elements.refreshLabel.textContent = `Błąd strumienia (${timestamp}). Próba ponownego połączenia...`;
+          }
+          stopStream();
+          if (supportsFetch) {
+            startPolling();
+          }
+          scheduleReconnect();
+        });
+      };
+
       if (elements.refreshButton) {
         elements.refreshButton.addEventListener('click', () => {
-          loadStatus(true);
+          if (supportsFetch) {
+            loadStatus(true);
+          } else if (supportsEventSource) {
+            stopStream();
+            startStream();
+          }
         });
       }
 
-      loadStatus();
-      refreshTimer = setInterval(loadStatus, REFRESH_INTERVAL);
+      if (supportsEventSource) {
+        startStream();
+      } else if (supportsFetch) {
+        startPolling();
+      }
 
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          if (!refreshTimer) {
-            loadStatus();
-            refreshTimer = setInterval(loadStatus, REFRESH_INTERVAL);
+          if (supportsEventSource) {
+            if (!eventSource) {
+              startStream();
+            }
+          } else if (supportsFetch && !refreshTimer) {
+            startPolling();
           }
-        } else if (refreshTimer) {
-          clearInterval(refreshTimer);
-          refreshTimer = null;
+        } else {
+          if (supportsEventSource) {
+            stopStream();
+          }
+          stopPolling();
         }
       });
     })();
