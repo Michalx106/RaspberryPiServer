@@ -17,6 +17,8 @@ $time = $snapshot['time'];
 $cpuTemperature = $snapshot['cpuTemperature'];
 $systemLoad = $snapshot['systemLoad'];
 $uptime = $snapshot['uptime'];
+$memoryUsage = $snapshot['memoryUsage'];
+$diskUsage = $snapshot['diskUsage'];
 $serviceStatuses = $snapshot['services'];
 ?>
 <!DOCTYPE html>
@@ -24,168 +26,7 @@ $serviceStatuses = $snapshot['services'];
 <head>
   <meta charset="UTF-8">
   <title>Moja strona na Raspberry Pi</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 900px;
-      margin: 40px auto;
-      background: #e9eef5;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
-    }
-    h1 {
-      color: #0066cc;
-    }
-    p {
-      font-size: 18px;
-    }
-    footer {
-      margin-top: 40px;
-      font-size: 14px;
-      color: #666;
-    }
-    .status-panel {
-      margin-top: 32px;
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-    }
-    .status-panel h2 {
-      margin-top: 0;
-      margin-bottom: 16px;
-      color: #0b5394;
-    }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .metric {
-      background: #f0f6ff;
-      border-radius: 10px;
-      padding: 16px;
-    }
-    .metric-label {
-      display: block;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #5a6a85;
-      margin-bottom: 8px;
-    }
-    .metric-value {
-      font-size: 22px;
-      font-weight: bold;
-      color: #003d80;
-    }
-    .service-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .service-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #f7f8fa;
-      border-radius: 10px;
-      padding: 12px 16px;
-      margin-bottom: 12px;
-      transition: transform 0.1s ease;
-    }
-    .service-item:hover {
-      transform: translateX(2px);
-    }
-    .service-name {
-      font-weight: 600;
-      color: #2b3d55;
-    }
-    .service-name small {
-      display: block;
-      font-size: 12px;
-      font-weight: normal;
-      color: #7a879c;
-    }
-    .service-status {
-      font-weight: 600;
-    }
-    .status-ok {
-      border-left: 4px solid #2c974b;
-    }
-    .status-ok .service-status {
-      color: #2c974b;
-    }
-    .status-off {
-      border-left: 4px solid #8a9099;
-    }
-    .status-off .service-status {
-      color: #636b78;
-    }
-    .status-error {
-      border-left: 4px solid #d93025;
-    }
-    .status-error .service-status {
-      color: #d93025;
-    }
-    .status-warn {
-      border-left: 4px solid #f6c026;
-    }
-    .status-warn .service-status {
-      color: #b8860b;
-    }
-    .status-unknown {
-      border-left: 4px solid #5f6368;
-    }
-    .status-unknown .service-status {
-      color: #5f6368;
-    }
-    .status-note {
-      margin-top: 16px;
-      font-size: 14px;
-      color: #6b7688;
-    }
-    .panel-footer {
-      margin-top: 20px;
-    }
-    .status-refresh {
-      margin-top: 8px;
-      font-size: 13px;
-      color: #5a6a85;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 12px;
-    }
-    .status-refresh.is-loading {
-      opacity: 0.85;
-    }
-    .status-refresh.has-error {
-      color: #d93025;
-    }
-    .status-refresh button {
-      background: #0b5394;
-      color: #ffffff;
-      border: none;
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.1s ease;
-    }
-    .status-refresh button:hover {
-      background: #094579;
-      transform: translateY(-1px);
-    }
-    .status-refresh button:disabled {
-      background: #7a879c;
-      cursor: not-allowed;
-      opacity: 0.85;
-      transform: none;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <h1>Witaj na mojej stronie! 🎉</h1>
@@ -199,6 +40,14 @@ $serviceStatuses = $snapshot['services'];
       <div class="metric">
         <span class="metric-label">Temperatura CPU</span>
         <span class="metric-value" data-role="cpu-temperature"><?= h($cpuTemperature ?? 'Brak danych'); ?></span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Pamięć RAM</span>
+        <span class="metric-value" data-role="memory-usage"><?= h($memoryUsage ?? 'Brak danych'); ?></span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Miejsce na dysku</span>
+        <span class="metric-value" data-role="disk-usage"><?= h($diskUsage ?? 'Brak danych'); ?></span>
       </div>
       <div class="metric">
         <span class="metric-label">Obciążenie systemu</span>
@@ -254,6 +103,8 @@ $serviceStatuses = $snapshot['services'];
       const elements = {
         time: document.querySelector('[data-role="server-time"]'),
         cpuTemperature: document.querySelector('[data-role="cpu-temperature"]'),
+        memoryUsage: document.querySelector('[data-role="memory-usage"]'),
+        diskUsage: document.querySelector('[data-role="disk-usage"]'),
         systemLoad: document.querySelector('[data-role="system-load"]'),
         uptime: document.querySelector('[data-role="uptime"]'),
         serviceList: document.querySelector('[data-role="service-list"]'),
@@ -380,6 +231,14 @@ $serviceStatuses = $snapshot['services'];
 
         if (elements.cpuTemperature) {
           elements.cpuTemperature.textContent = fallback(data.cpuTemperature ?? null);
+        }
+
+        if (elements.memoryUsage) {
+          elements.memoryUsage.textContent = fallback(data.memoryUsage ?? null);
+        }
+
+        if (elements.diskUsage) {
+          elements.diskUsage.textContent = fallback(data.diskUsage ?? null);
         }
 
         if (elements.systemLoad) {

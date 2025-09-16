@@ -11,6 +11,8 @@ declare(strict_types=1);
  *     cpuTemperature: ?string,
  *     systemLoad: ?string,
  *     uptime: ?string,
+ *     memoryUsage: ?string,
+ *     diskUsage: ?string,
  *     services: array<int, array{label: string, service: string, status: string, class: string, details: string|null}>
  * }
  */
@@ -24,6 +26,8 @@ function collectStatusSnapshot(array $servicesToCheck): array
         'cpuTemperature' => getCpuTemperature(),
         'systemLoad' => getSystemLoad(),
         'uptime' => getUptime(),
+        'memoryUsage' => getMemoryUsage(),
+        'diskUsage' => getDiskUsage(),
         'services' => collectServiceStatuses($servicesToCheck),
     ];
 }
