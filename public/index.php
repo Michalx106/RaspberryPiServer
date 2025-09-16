@@ -48,6 +48,7 @@ $serviceStatuses = $snapshot['services'];
   <meta charset="UTF-8">
   <title>Moja strona na Raspberry Pi</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb" crossorigin="anonymous"></script>
 </head>
 <body>
   <h1>Witaj na mojej stronie! 🎉</h1>
@@ -84,6 +85,7 @@ $serviceStatuses = $snapshot['services'];
       <h3>Historia temperatury CPU</h3>
       <div class="history-chart" data-role="history-chart-wrapper">
         <svg data-role="history-chart" viewBox="0 0 600 260" role="img" aria-label="Historia temperatury CPU"></svg>
+
       </div>
       <p class="history-empty" data-role="history-empty">Historia ładuje się...</p>
     </div>
@@ -157,6 +159,7 @@ $serviceStatuses = $snapshot['services'];
         maxEntries: null,
         limit: null,
         chartSignature: null,
+
       };
 
       let refreshTimer = null;
@@ -575,6 +578,7 @@ $serviceStatuses = $snapshot['services'];
         if (historyState.enabled === null) {
           destroyHistoryChart();
           hideChart();
+
           setHistoryMessage('Historia ładuje się...');
           return;
         }
@@ -582,6 +586,7 @@ $serviceStatuses = $snapshot['services'];
         if (historyState.enabled === false) {
           destroyHistoryChart();
           hideChart();
+
           setHistoryMessage('Historia jest wyłączona. Skonfiguruj zmienne środowiskowe, aby ją włączyć.');
           return;
         }
@@ -593,6 +598,7 @@ $serviceStatuses = $snapshot['services'];
         if (validEntries.length === 0) {
           destroyHistoryChart();
           hideChart();
+
           setHistoryMessage('Historia nie zawiera jeszcze danych.');
           return;
         }
@@ -614,6 +620,7 @@ $serviceStatuses = $snapshot['services'];
             return;
           }
           historyState.chartSignature = signature;
+
         }
 
         setHistoryMessage('', true);
