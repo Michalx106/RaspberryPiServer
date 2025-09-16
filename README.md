@@ -25,3 +25,43 @@ Po włączeniu ochrona wymaga podania poprawnych poświadczeń przy każdej pró
 (do czasu zapisania ich przez przeglądarkę). W przypadku błędnych danych aplikacja
 odpowie statusem HTTP `401` oraz nagłówkiem `WWW-Authenticate`, co poinformuje
 przeglądarkę o konieczności podania loginu i hasła.
+
+## Historia metryk
+
+Panel może zapisywać kolejne snapshoty stanu do pliku JSON i prezentować historię
+na prostym wykresie temperatury CPU.
+
+### Konfiguracja zapisu
+
+Historia jest domyślnie włączona i zapisuje dane w pliku `var/status-history.json`.
+Możesz dostosować zachowanie za pomocą zmiennych środowiskowych:
+
+- `APP_HISTORY_PATH` – niestandardowa ścieżka do pliku JSON z historią.
+  Upewnij się, że proces PHP ma prawa zapisu do katalogu.
+- `APP_HISTORY_MAX_ENTRIES` – maksymalna liczba przechowywanych snapshotów (domyślnie 360).
+  Ustaw wartość `0`, aby całkowicie wyłączyć zapisywanie historii.
+- `APP_HISTORY_MAX_AGE` – (opcjonalnie) maksymalny wiek danych w sekundach. Starsze wpisy
+  będą usuwane podczas kolejnych zapisów.
+
+Katalog `var/` zawiera plik `.gitignore`, dzięki czemu dane historii nie trafiają do repozytorium.
+
+### API
+
+Do pobrania historii służy nowe zapytanie HTTP:
+
+```
+GET /index.php?status=history
+```
+
+Odpowiedź zawiera m.in. pola `enabled`, `maxEntries`, `maxAge`, `count` oraz tablicę `entries`
+z uporządkowanymi rekordami historii (z wartościami liczbowymi i etykietami). Możesz zawęzić liczbę
+zwracanych elementów parametrem `limit`, np. `?status=history&limit=120`.
+
+### Wykres w interfejsie
+
+Front-end rysuje wykres temperatury CPU z wykorzystaniem elementu SVG generowanego przez
+JavaScript, dzięki czemu nie wymaga dodatkowych bibliotek ani dostępu do zewnętrznego CDN.
+Wykres aktualizuje się automatycznie po wczytaniu strony, ręcznym odświeżeniu oraz podczas pracy
+w trybie strumieniowym. Jeżeli historia jest wyłączona lub niedostępna, panel wyświetli
+odpowiedni komunikat. Wygląd i zachowanie wykresu możesz dopasować, modyfikując pliki
+`public/index.php` oraz `public/styles.css`.

@@ -20,7 +20,7 @@ function collectStatusSnapshot(array $servicesToCheck): array
 {
     $now = new DateTimeImmutable('now');
 
-    return [
+    $snapshot = [
         'time' => $now->format('H:i:s'),
         'generatedAt' => $now->format(DATE_ATOM),
         'cpuTemperature' => getCpuTemperature(),
@@ -30,6 +30,10 @@ function collectStatusSnapshot(array $servicesToCheck): array
         'diskUsage' => getDiskUsage(),
         'services' => collectServiceStatuses($servicesToCheck),
     ];
+
+    saveStatusHistorySnapshot($snapshot);
+
+    return $snapshot;
 }
 
 /**
