@@ -28,7 +28,9 @@ function handleStatusRequest(?string $statusParam, array $servicesToCheck): bool
 function respondWithStatusJson(array $servicesToCheck): void
 {
     $snapshot = collectStatusSnapshot($servicesToCheck);
-    [$payload, $hasError] = encodeStatusSnapshot($snapshot);
+    $encoding = encodeStatusSnapshot($snapshot);
+    $payload = $encoding['payload'];
+    $hasError = $encoding['hasError'];
 
     header('Content-Type: application/json; charset=UTF-8');
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -80,7 +82,8 @@ function streamStatus(array $servicesToCheck): void
         }
 
         $snapshot = collectStatusSnapshot($servicesToCheck);
-        [$payload] = encodeStatusSnapshot($snapshot);
+        $encoding = encodeStatusSnapshot($snapshot);
+        $payload = $encoding['payload'];
 
         echo "event: status\n";
         echo "data: {$payload}\n\n";
