@@ -15,6 +15,9 @@ function handleStatusRequest(?string $statusParam, array $servicesToCheck): bool
         case 'stream':
             streamStatus($servicesToCheck);
             return true;
+        case 'history':
+            respondWithStatusHistory();
+            return true;
         default:
             return false;
     }
@@ -95,4 +98,62 @@ function streamStatus(array $servicesToCheck): void
             sleep($streamInterval);
         }
     }
+}
+
+/**
+ * Zwraca historię snapshotów w formacie JSON.
+ */
+function respondWithStatusHistory(): void
+{
+    $config = getStatusHistoryConfig();
+
+    $limit = null;
+    $limitParam = $_GET['limit'] ?? null;
+    if (is_string($limitParam) && is_numeric($limitParam)) {
+        $limitValue = (int) $limitParam;
+        if ($limitValue > 0) {
+            $limit = $limitValue;
+        }
+    }
+
+    $entries = $config['enabled'] ? loadStatusHistory($limit) : [];
+
+    $payloadData = [
+        'generatedAt' => date(DATE_ATOM),
+        'enabled' => $config['enabled'],
+        'maxEntries' => $config['maxEntries'],
+        'maxAge' => $config['maxAge'],
+        'count' => count($entries),
+        'entries' => $entries,
+    ];
+
+    if ($limit !== null) {
+        $payloadData['limit'] = $limit;
+    }
+
+    $payload = json_encode($payloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $hasError = false;
+
+    if ($payload === false) {
+        $payload = json_encode([
+            'error' => json_last_error_msg() ?: 'Nie można zakodować danych historii',
+            'generatedAt' => date(DATE_ATOM),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($payload === false) {
+            $payload = '{"error":"Nie można zakodować danych historii"}';
+        }
+
+        $hasError = true;
+    }
+
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+
+    if ($hasError) {
+        http_response_code(500);
+    }
+
+    echo $payload;
 }
