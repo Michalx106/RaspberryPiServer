@@ -84,7 +84,8 @@ $serviceStatuses = $snapshot['services'];
     <div class="history-container" data-role="history-container">
       <h3>Historia temperatury CPU</h3>
       <div class="history-chart" data-role="history-chart-wrapper">
-        <canvas data-role="history-chart" height="260"></canvas>
+        <svg data-role="history-chart" viewBox="0 0 600 260" role="img" aria-label="Historia temperatury CPU"></svg>
+
       </div>
       <p class="history-empty" data-role="history-empty">Historia ładuje się...</p>
     </div>
@@ -155,9 +156,10 @@ $serviceStatuses = $snapshot['services'];
       const historyState = {
         enabled: null,
         entries: [],
-        chart: null,
         maxEntries: null,
         limit: null,
+        chartSignature: null,
+
       };
 
       let refreshTimer = null;
@@ -216,10 +218,10 @@ $serviceStatuses = $snapshot['services'];
       };
 
       const destroyHistoryChart = () => {
-        if (historyState.chart) {
-          historyState.chart.destroy();
-          historyState.chart = null;
+        if (elements.historyChart) {
+          elements.historyChart.innerHTML = '';
         }
+        historyState.chartSignature = null;
       };
 
       const getHistoryCapacity = () => {
@@ -237,6 +239,250 @@ $serviceStatuses = $snapshot['services'];
         if (capacity > 0 && historyState.entries.length > capacity) {
           historyState.entries = historyState.entries.slice(-capacity);
         }
+      };
+
+      const CHART_VIEWBOX_WIDTH = 600;
+      const CHART_VIEWBOX_HEIGHT = 260;
+      const CHART_PADDING = { top: 24, right: 24, bottom: 36, left: 56 };
+      const CHART_GRID_LINES = 4;
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+
+      const createSvgElement = (name, attributes = {}) => {
+        const element = document.createElementNS(SVG_NS, name);
+        Object.entries(attributes).forEach(([attribute, rawValue]) => {
+          if (rawValue === undefined || rawValue === null) {
+            return;
+          }
+          element.setAttribute(attribute, String(rawValue));
+        });
+        return element;
+      };
+
+      const formatTemperatureValue = (value) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          return '';
+        }
+        return `${value.toFixed(1)} °C`;
+      };
+
+      const formatHistoryEntryTime = (entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return '—';
+        }
+
+        if (typeof entry.time === 'string' && entry.time.trim() !== '') {
+          return entry.time.trim();
+        }
+
+        if (typeof entry.generatedAt === 'string') {
+          const parsed = new Date(entry.generatedAt);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed.toLocaleTimeString();
+          }
+        }
+
+        return '—';
+      };
+
+      const renderHistoryChart = (entries) => {
+        const svg = elements.historyChart;
+        if (!svg) {
+          return false;
+        }
+        if (typeof SVGElement !== 'undefined' && !(svg instanceof SVGElement)) {
+          return false;
+        }
+
+        svg.setAttribute('viewBox', `0 0 ${CHART_VIEWBOX_WIDTH} ${CHART_VIEWBOX_HEIGHT}`);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        svg.innerHTML = '';
+
+        if (!Array.isArray(entries) || entries.length === 0) {
+          return false;
+        }
+
+        const values = entries.map((entry) => entry.cpuTemperatureValue);
+        const minValue = Math.min(...values);
+        const maxValue = Math.max(...values);
+
+        if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+          return false;
+        }
+
+        let chartMin = minValue;
+        let chartMax = maxValue;
+
+        if (chartMax === chartMin) {
+          const offset = chartMax === 0 ? 1 : Math.abs(chartMax) * 0.1;
+          chartMin -= offset;
+          chartMax += offset;
+        } else {
+          const paddingValue = (chartMax - chartMin) * 0.05;
+          chartMin -= paddingValue;
+          chartMax += paddingValue;
+        }
+
+        const range = chartMax - chartMin;
+        if (range <= 0) {
+          return false;
+        }
+
+        const width = CHART_VIEWBOX_WIDTH;
+        const height = CHART_VIEWBOX_HEIGHT;
+        const padding = CHART_PADDING;
+        const innerWidth = width - padding.left - padding.right;
+        const innerHeight = height - padding.top - padding.bottom;
+
+        if (innerWidth <= 0 || innerHeight <= 0) {
+          return false;
+        }
+
+        const baseY = padding.top + innerHeight;
+        const baseXStart = padding.left;
+        const baseXEnd = width - padding.right;
+
+        const desc = createSvgElement('desc');
+        desc.textContent = 'Wizualizacja historii temperatury CPU.';
+        svg.appendChild(desc);
+
+        const gridGroup = createSvgElement('g', { class: 'history-grid' });
+        for (let i = 0; i <= CHART_GRID_LINES; i += 1) {
+          const ratio = i / CHART_GRID_LINES;
+          const y = padding.top + (innerHeight * ratio);
+          const line = createSvgElement('line', {
+            x1: baseXStart,
+            y1: y,
+            x2: baseXEnd,
+            y2: y,
+            class: 'history-grid-line',
+          });
+          gridGroup.appendChild(line);
+
+          const value = chartMax - (range * ratio);
+          const label = createSvgElement('text', {
+            x: baseXStart - 8,
+            y,
+            class: 'history-axis-label history-axis-label--y',
+            'text-anchor': 'end',
+            'dominant-baseline': 'middle',
+          });
+          label.textContent = formatTemperatureValue(value);
+          gridGroup.appendChild(label);
+        }
+        svg.appendChild(gridGroup);
+
+        const axisGroup = createSvgElement('g', { class: 'history-axis' });
+        const axisY = createSvgElement('line', {
+          x1: baseXStart,
+          y1: padding.top,
+          x2: baseXStart,
+          y2: baseY,
+          class: 'history-axis-line',
+        });
+        axisGroup.appendChild(axisY);
+
+        const axisX = createSvgElement('line', {
+          x1: baseXStart,
+          y1: baseY,
+          x2: baseXEnd,
+          y2: baseY,
+          class: 'history-axis-line',
+        });
+        axisGroup.appendChild(axisX);
+
+        const axisTitle = createSvgElement('text', {
+          x: baseXStart,
+          y: padding.top - 10,
+          class: 'history-axis-label history-axis-label--title',
+          'text-anchor': 'start',
+        });
+        axisTitle.textContent = 'Temperatura CPU [°C]';
+        axisGroup.appendChild(axisTitle);
+
+        const summary = createSvgElement('text', {
+          x: baseXEnd,
+          y: padding.top - 10,
+          class: 'history-axis-label history-axis-label--summary',
+          'text-anchor': 'end',
+        });
+        summary.textContent = `Min: ${formatTemperatureValue(minValue)} · Max: ${formatTemperatureValue(maxValue)}`;
+        axisGroup.appendChild(summary);
+
+        svg.appendChild(axisGroup);
+
+        const points = entries.map((entry, index) => {
+          const ratio = entries.length > 1 ? index / (entries.length - 1) : 0.5;
+          const x = padding.left + (innerWidth * ratio);
+          let normalized = (entry.cpuTemperatureValue - chartMin) / range;
+          if (!Number.isFinite(normalized)) {
+            normalized = 0;
+          }
+          normalized = Math.max(0, Math.min(1, normalized));
+          const y = padding.top + innerHeight - (normalized * innerHeight);
+          return { x, y, entry };
+        });
+
+        let areaPath = `M ${points[0].x.toFixed(2)} ${baseY.toFixed(2)}`;
+        let linePath = '';
+        points.forEach((point, index) => {
+          linePath += `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)},${point.y.toFixed(2)} `;
+          areaPath += ` L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+        });
+        areaPath += ` L ${points[points.length - 1].x.toFixed(2)} ${baseY.toFixed(2)} Z`;
+
+        const area = createSvgElement('path', {
+          d: areaPath.trim(),
+          class: 'history-area',
+        });
+        svg.appendChild(area);
+
+        const line = createSvgElement('path', {
+          d: linePath.trim(),
+          class: 'history-line',
+        });
+        svg.appendChild(line);
+
+        const dotsGroup = createSvgElement('g', { class: 'history-points' });
+        const radius = entries.length > 160 ? 1.2 : entries.length > 80 ? 1.6 : 2.4;
+        points.forEach((point) => {
+          const circle = createSvgElement('circle', {
+            cx: point.x.toFixed(2),
+            cy: point.y.toFixed(2),
+            r: radius,
+            class: 'history-dot',
+          });
+          const title = createSvgElement('title');
+          const label = typeof point.entry.cpuTemperatureLabel === 'string'
+            ? point.entry.cpuTemperatureLabel
+            : formatTemperatureValue(point.entry.cpuTemperatureValue);
+          title.textContent = `${label} (${formatHistoryEntryTime(point.entry)})`;
+          circle.appendChild(title);
+          dotsGroup.appendChild(circle);
+        });
+        svg.appendChild(dotsGroup);
+
+        const xLabelIndices = Array.from(new Set([
+          0,
+          entries.length > 1 ? Math.floor((entries.length - 1) / 2) : 0,
+          entries.length - 1,
+        ])).filter((index) => index >= 0 && index < entries.length).sort((a, b) => a - b);
+
+        const labelsGroup = createSvgElement('g', { class: 'history-x-labels' });
+        xLabelIndices.forEach((index) => {
+          const entry = entries[index];
+          const text = createSvgElement('text', {
+            x: points[index].x.toFixed(2),
+            y: (baseY + 18).toFixed(2),
+            class: 'history-axis-label history-axis-label--x',
+            'text-anchor': 'middle',
+            'dominant-baseline': 'hanging',
+          });
+          text.textContent = formatHistoryEntryTime(entry);
+          labelsGroup.appendChild(text);
+        });
+        svg.appendChild(labelsGroup);
+
+        return true;
       };
 
       const parseTemperatureValue = (value) => {
@@ -323,118 +569,61 @@ $serviceStatuses = $snapshot['services'];
           return;
         }
 
-        if (historyState.enabled === null) {
-          destroyHistoryChart();
+        const hideChart = () => {
           if (elements.historyChartWrapper) {
             elements.historyChartWrapper.classList.remove('is-visible');
           }
+        };
+
+        if (historyState.enabled === null) {
+          destroyHistoryChart();
+          hideChart();
+
           setHistoryMessage('Historia ładuje się...');
           return;
         }
 
         if (historyState.enabled === false) {
           destroyHistoryChart();
-          if (elements.historyChartWrapper) {
-            elements.historyChartWrapper.classList.remove('is-visible');
-          }
+          hideChart();
+
           setHistoryMessage('Historia jest wyłączona. Skonfiguruj zmienne środowiskowe, aby ją włączyć.');
           return;
         }
 
-        const validEntries = historyState.entries.filter((entry) => entry && typeof entry.cpuTemperatureValue === 'number' && Number.isFinite(entry.cpuTemperatureValue));
+        const validEntries = historyState.entries.filter(
+          (entry) => entry && typeof entry.cpuTemperatureValue === 'number' && Number.isFinite(entry.cpuTemperatureValue),
+        );
 
         if (validEntries.length === 0) {
           destroyHistoryChart();
-          if (elements.historyChartWrapper) {
-            elements.historyChartWrapper.classList.remove('is-visible');
-          }
+          hideChart();
+
           setHistoryMessage('Historia nie zawiera jeszcze danych.');
           return;
         }
 
-        if (typeof window.Chart !== 'function') {
-          destroyHistoryChart();
-          if (elements.historyChartWrapper) {
-            elements.historyChartWrapper.classList.remove('is-visible');
+        const signature = JSON.stringify(
+          validEntries.map((entry) => [
+            entry.generatedAt ?? entry.time ?? '',
+            entry.cpuTemperatureValue,
+            entry.cpuTemperatureLabel ?? '',
+          ]),
+        );
+
+        if (historyState.chartSignature !== signature) {
+          const success = renderHistoryChart(validEntries);
+          if (!success) {
+            destroyHistoryChart();
+            hideChart();
+            setHistoryMessage('Nie udało się narysować wykresu historii.');
+            return;
           }
-          setHistoryMessage('Nie można wyświetlić wykresu (biblioteka Chart.js niedostępna).');
-          return;
+          historyState.chartSignature = signature;
+
         }
 
         setHistoryMessage('', true);
-
-        const labels = validEntries.map((entry) => entry.time ?? (entry.generatedAt ? new Date(entry.generatedAt).toLocaleTimeString() : '—'));
-        const values = validEntries.map((entry) => entry.cpuTemperatureValue);
-
-        if (!historyState.chart) {
-          const canvas = elements.historyChart;
-          if (!canvas) {
-            setHistoryMessage('Brak elementu canvas dla wykresu.');
-            return;
-          }
-
-          const context = canvas.getContext('2d');
-          if (!context) {
-            setHistoryMessage('Nie można zainicjować kontekstu wykresu.');
-            return;
-          }
-
-          historyState.chart = new window.Chart(context, {
-            type: 'line',
-            data: {
-              labels,
-              datasets: [
-                {
-                  label: 'Temperatura CPU [°C]',
-                  data: values,
-                  borderColor: '#0b5394',
-                  backgroundColor: 'rgba(11, 83, 148, 0.2)',
-                  tension: 0.3,
-                  fill: true,
-                  pointRadius: 2,
-                  pointHoverRadius: 4,
-                },
-              ],
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              interaction: {
-                intersect: false,
-                mode: 'nearest',
-              },
-              scales: {
-                x: {
-                  ticks: {
-                    maxRotation: 0,
-                  },
-                },
-                y: {
-                  ticks: {
-                    callback: (value) => `${value}°`,
-                  },
-                },
-              },
-              plugins: {
-                legend: {
-                  display: false,
-                },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => {
-                      const entry = validEntries[context.dataIndex];
-                      return entry?.cpuTemperatureLabel ?? `${context.parsed.y} °C`;
-                    },
-                  },
-                },
-              },
-            },
-          });
-        } else {
-          historyState.chart.data.labels = labels;
-          historyState.chart.data.datasets[0].data = values;
-          historyState.chart.update('none');
-        }
 
         if (elements.historyChartWrapper) {
           elements.historyChartWrapper.classList.add('is-visible');

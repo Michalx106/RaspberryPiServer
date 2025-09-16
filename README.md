@@ -59,11 +59,9 @@ zwracanych elementów parametrem `limit`, np. `?status=history&limit=120`.
 
 ### Wykres w interfejsie
 
-Front-end korzysta z biblioteki [Chart.js](https://www.chartjs.org/) ładowanej z CDN, aby narysować
-wykres temperatury CPU. Wykres aktualizuje się automatycznie po wczytaniu strony, ręcznym
-odświeżeniu lub odbiorze nowych danych w trybie strumieniowym. Jeśli historia jest wyłączona
-albo niedostępna, panel pokaże odpowiedni komunikat.
-
-Upewnij się, że przeglądarka ma dostęp do CDN (`cdn.jsdelivr.net`), aby załadować bibliotekę.
-W środowiskach odizolowanych możesz zainstalować Chart.js lokalnie i zaktualizować ścieżkę w pliku
-`public/index.php`.
+Front-end rysuje wykres temperatury CPU z wykorzystaniem elementu SVG generowanego przez
+JavaScript, dzięki czemu nie wymaga dodatkowych bibliotek ani dostępu do zewnętrznego CDN.
+Wykres aktualizuje się automatycznie po wczytaniu strony, ręcznym odświeżeniu oraz podczas pracy
+w trybie strumieniowym. Jeżeli historia jest wyłączona lub niedostępna, panel wyświetli
+odpowiedni komunikat. Wygląd i zachowanie wykresu możesz dopasować, modyfikując pliki
+`public/index.php` oraz `public/styles.css`.
