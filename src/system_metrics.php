@@ -74,3 +74,104 @@ function getUptime(): ?string
 
     return null;
 }
+
+/**
+ * Formatuje liczbę bajtów do czytelnej postaci.
+ */
+function formatBytesForMetrics(float $bytes): string
+{
+    $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    $unitIndex = 0;
+    $value = max($bytes, 0.0);
+
+    while ($value >= 1024 && $unitIndex < count($units) - 1) {
+        $value /= 1024;
+        $unitIndex++;
+    }
+
+    $precision = $unitIndex === 0 ? 0 : 1;
+
+    return number_format($value, $precision, '.', ' ') . ' ' . $units[$unitIndex];
+}
+
+/**
+ * Odczytuje użycie pamięci RAM.
+ */
+function getMemoryUsage(): ?string
+{
+    $meminfoFile = '/proc/meminfo';
+    if (!is_readable($meminfoFile)) {
+        return null;
+    }
+
+    $lines = @file($meminfoFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return null;
+    }
+
+    $values = [];
+    foreach ($lines as $line) {
+        $parts = explode(':', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $key = trim($parts[0]);
+        $rawValue = trim($parts[1]);
+
+        if ($key === '' || $rawValue === '') {
+            continue;
+        }
+
+        if (preg_match('/^(\d+)\s*kB$/i', $rawValue, $matches)) {
+            $values[$key] = (float) $matches[1] * 1024;
+        }
+    }
+
+    if (!isset($values['MemTotal'])) {
+        return null;
+    }
+
+    $total = $values['MemTotal'];
+    $available = $values['MemAvailable'] ?? null;
+
+    if ($available === null) {
+        $free = $values['MemFree'] ?? 0.0;
+        $buffers = $values['Buffers'] ?? 0.0;
+        $cached = $values['Cached'] ?? 0.0;
+        $available = $free + $buffers + $cached;
+    }
+
+    $used = max($total - $available, 0.0);
+    $percentage = $total > 0 ? ($used / $total) * 100 : 0.0;
+
+    return sprintf(
+        '%s / %s (%s%%)',
+        formatBytesForMetrics($used),
+        formatBytesForMetrics($total),
+        number_format($percentage, 1, '.', ' ')
+    );
+}
+
+/**
+ * Odczytuje użycie miejsca na dysku.
+ */
+function getDiskUsage(string $path = '/'): ?string
+{
+    $total = @disk_total_space($path);
+    $free = @disk_free_space($path);
+
+    if ($total === false || $free === false || $total <= 0) {
+        return null;
+    }
+
+    $used = max($total - $free, 0.0);
+    $percentage = ($used / $total) * 100;
+
+    return sprintf(
+        '%s / %s (%s%%)',
+        formatBytesForMetrics($used),
+        formatBytesForMetrics($total),
+        number_format($percentage, 1, '.', ' ')
+    );
+}
