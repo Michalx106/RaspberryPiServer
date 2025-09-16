@@ -13,10 +13,27 @@ $authUsername = $authConfig['username'] ?? null;
 $authPassword = $authConfig['password'] ?? null;
 
 if ($authUsername !== null && $authPassword !== null) {
-    $providedUsername = $_SERVER['PHP_AUTH_USER'] ?? null;
-    $providedPassword = $_SERVER['PHP_AUTH_PW'] ?? null;
+    $credentialsMatch = false;
 
-    $credentialsMatch = $providedUsername === $authUsername && $providedPassword === $authPassword;
+    $providedUsernameRaw = $_SERVER['PHP_AUTH_USER'] ?? null;
+    $providedPasswordRaw = $_SERVER['PHP_AUTH_PW'] ?? null;
+
+    if ($providedUsernameRaw !== null && $providedPasswordRaw !== null) {
+        $providedUsername = (string) $providedUsernameRaw;
+        $providedPassword = (string) $providedPasswordRaw;
+        $expectedUsername = (string) $authUsername;
+        $expectedPassword = (string) $authPassword;
+
+        if (
+            $providedUsername !== ''
+            && $providedPassword !== ''
+            && $expectedUsername !== ''
+            && $expectedPassword !== ''
+        ) {
+            $credentialsMatch = hash_equals($expectedUsername, $providedUsername)
+                && hash_equals($expectedPassword, $providedPassword);
+        }
+    }
 
     if (!$credentialsMatch) {
         header('WWW-Authenticate: Basic realm="RaspberryPiServer"');

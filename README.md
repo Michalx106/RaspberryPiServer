@@ -32,7 +32,8 @@ Jeśli którakolwiek z wartości jest pusta lub niezdefiniowana, ochrona jest wy
 Po włączeniu ochrona wymaga podania poprawnych poświadczeń przy każdej próbie dostępu
 (do czasu zapisania ich przez przeglądarkę). W przypadku błędnych danych aplikacja
 odpowie statusem HTTP `401` oraz nagłówkiem `WWW-Authenticate`, co poinformuje
-przeglądarkę o konieczności podania loginu i hasła.
+przeglądarkę o konieczności podania loginu i hasła. Weryfikacja poświadczeń odbywa się
+przy użyciu funkcji `hash_equals`, dzięki czemu porównanie ma stały czas wykonania.
 
 ## Historia metryk
 
