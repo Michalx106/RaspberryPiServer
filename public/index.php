@@ -387,7 +387,8 @@ if (isset($_GET['status']) && $_GET['status'] === 'json') {
 <body>
   <h1>Witaj na mojej stronie! 🎉</h1>
   <p>Ta strona działa na <strong>Raspberry Pi + Nginx + PHP</strong>.</p>
-  <p>Aktualny czas serwera to: <strong data-role="server-time"><?= h($time); ?></strong></p>
+
+  <p>Aktualny czas serwera to: <strong><?= h($time); ?></strong></p>
 
   <section class="status-panel">
     <h2>Panel stanu Raspberry Pi</h2>
