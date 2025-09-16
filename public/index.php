@@ -3,8 +3,29 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/bootstrap.php';
 
+/** @var array{username: string|null, password: string|null} $authConfig */
+$authConfig = require __DIR__ . '/../config/auth.php';
+
 /** @var array<string, string> $servicesToCheck */
 $servicesToCheck = require __DIR__ . '/../config/services.php';
+
+$authUsername = $authConfig['username'] ?? null;
+$authPassword = $authConfig['password'] ?? null;
+
+if ($authUsername !== null && $authPassword !== null) {
+    $providedUsername = $_SERVER['PHP_AUTH_USER'] ?? null;
+    $providedPassword = $_SERVER['PHP_AUTH_PW'] ?? null;
+
+    $credentialsMatch = $providedUsername === $authUsername && $providedPassword === $authPassword;
+
+    if (!$credentialsMatch) {
+        header('WWW-Authenticate: Basic realm="RaspberryPiServer"');
+        header('Content-Type: text/plain; charset=utf-8');
+        http_response_code(401);
+        echo 'Unauthorized';
+        return;
+    }
+}
 
 $statusParam = isset($_GET['status']) ? (string) $_GET['status'] : null;
 if (handleStatusRequest($statusParam, $servicesToCheck)) {
