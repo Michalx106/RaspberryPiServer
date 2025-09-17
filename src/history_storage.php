@@ -75,9 +75,78 @@ function saveStatusHistorySnapshot(array $snapshot): void
         return;
     }
 
+    static $historyCache = null;
+    if ($historyCache === null) {
+        $historyCache = [
+            'path' => null,
+            'initialised' => false,
+            'lastTimestamp' => null,
+            'lastGeneratedAt' => null,
+            'lastHash' => null,
+        ];
+    }
+
     $entry = transformSnapshotToHistoryEntry($snapshot);
 
     $path = $config['path'];
+    if ($historyCache['path'] !== $path) {
+        $historyCache['path'] = $path;
+        $historyCache['initialised'] = false;
+        $historyCache['lastTimestamp'] = null;
+        $historyCache['lastGeneratedAt'] = null;
+        $historyCache['lastHash'] = null;
+    }
+
+    $fileExists = is_file($path);
+    $fileSize = $fileExists ? @filesize($path) : false;
+    $hasPersistedData = $fileExists && is_int($fileSize) && $fileSize > 0;
+
+    if (!$hasPersistedData && $historyCache['initialised']) {
+        $historyCache['initialised'] = false;
+        $historyCache['lastTimestamp'] = null;
+        $historyCache['lastGeneratedAt'] = null;
+        $historyCache['lastHash'] = null;
+    }
+
+    $minInterval = max((int) $config['minInterval'], 0);
+    $entryTimestamp = historyEntryTimestamp($entry);
+    $entryGeneratedAt = isset($entry['generatedAt']) && is_string($entry['generatedAt'])
+        ? $entry['generatedAt']
+        : null;
+    $entryHash = historyEntryHash($entry);
+
+    $canUseCache = $historyCache['initialised'] && $hasPersistedData;
+
+    if ($canUseCache) {
+        $cachedGeneratedAt = $historyCache['lastGeneratedAt'];
+        $cachedHash = $historyCache['lastHash'];
+
+        if ($entryGeneratedAt !== null && $cachedGeneratedAt !== null
+            && $entryHash !== null && $cachedHash !== null
+            && $entryGeneratedAt === $cachedGeneratedAt
+        ) {
+            $hashesMatch = $cachedHash === $entryHash;
+            if (!$hashesMatch && function_exists('hash_equals')) {
+                $hashesMatch = hash_equals($cachedHash, $entryHash);
+            }
+
+            if ($hashesMatch) {
+                return;
+            }
+        }
+
+        if ($minInterval > 0
+            && $entryTimestamp !== null
+            && $historyCache['lastTimestamp'] !== null
+            && ($entryTimestamp - $historyCache['lastTimestamp']) < $minInterval
+            && !($entryGeneratedAt !== null
+                && $cachedGeneratedAt !== null
+                && $entryGeneratedAt === $cachedGeneratedAt)
+        ) {
+            return;
+        }
+    }
+
     $directory = dirname($path);
     if (!is_dir($directory)) {
         if (!@mkdir($directory, 0775, true) && !is_dir($directory)) {
@@ -115,7 +184,8 @@ function saveStatusHistorySnapshot(array $snapshot): void
         }
 
         $historyCount = count($history);
-        $minInterval = max((int) $config['minInterval'], 0);
+        $lastPersistedEntry = $historyCount > 0 ? $history[$historyCount - 1] : null;
+        updateHistoryCache($historyCache, $path, $lastPersistedEntry);
         $historyChanged = false;
 
         if ($historyCount > 0) {
@@ -170,6 +240,10 @@ function saveStatusHistorySnapshot(array $snapshot): void
         ftruncate($handle, 0);
         fwrite($handle, $encoded);
         fflush($handle);
+
+        $updatedHistoryCount = count($history);
+        $updatedLastEntry = $updatedHistoryCount > 0 ? $history[$updatedHistoryCount - 1] : null;
+        updateHistoryCache($historyCache, $path, $updatedLastEntry);
     } finally {
         flock($handle, LOCK_UN);
         fclose($handle);
@@ -525,6 +599,43 @@ function historyEntryTimestamp(array $entry): ?int
     }
 
     return null;
+}
+
+/**
+ * @param array<string, mixed> $entry
+ */
+function historyEntryHash(array $entry): ?string
+{
+    $encoded = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($encoded === false) {
+        return null;
+    }
+
+    return sha1($encoded);
+}
+
+/**
+ * @param array{path: string|null, initialised: bool, lastTimestamp: int|null, lastGeneratedAt: string|null, lastHash: string|null} $cache
+ * @param array<string, mixed>|null $entry
+ */
+function updateHistoryCache(array &$cache, string $path, ?array $entry): void
+{
+    $cache['path'] = $path;
+    $cache['initialised'] = true;
+
+    if (is_array($entry)) {
+        $cache['lastGeneratedAt'] = isset($entry['generatedAt']) && is_string($entry['generatedAt'])
+            ? $entry['generatedAt']
+            : null;
+        $cache['lastTimestamp'] = historyEntryTimestamp($entry);
+        $cache['lastHash'] = historyEntryHash($entry);
+
+        return;
+    }
+
+    $cache['lastGeneratedAt'] = null;
+    $cache['lastTimestamp'] = null;
+    $cache['lastHash'] = null;
 }
 
 function parseTemperatureValue(?string $value): ?float
