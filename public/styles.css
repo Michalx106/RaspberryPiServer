@@ -292,41 +292,111 @@ footer {
 
 .shelly-device__actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 12px;
 }
 
 .shelly-device__action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
   border: none;
-}
-
-.shelly-device__action.is-secondary {
-  background: transparent;
-  color: var(--button-background);
-  border: 1px solid var(--button-background);
-}
-
-.shelly-device__action.is-secondary:hover {
+  border-radius: 50%;
   background: var(--button-background);
   color: var(--button-text);
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.shelly-device__action.is-secondary:disabled {
-  background: transparent;
-  color: var(--status-note);
-  border-color: var(--panel-border);
-  opacity: 0.6;
+.shelly-device__action[data-action="on"] {
+  background: var(--status-ok);
+  color: #ffffff;
 }
 
-.shelly-device__action.is-primary {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+.shelly-device__action[data-action="off"] {
+  background: var(--status-error);
+  color: #ffffff;
+}
+
+.shelly-device__action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+}
+
+.shelly-device__action:active {
+  transform: scale(0.94);
 }
 
 .shelly-device__action:disabled {
   cursor: not-allowed;
-  opacity: 0.75;
+  opacity: 0.6;
+  box-shadow: none;
   transform: none;
+}
+
+.shelly-device__action:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+}
+
+.shelly-device__action:hover .icon-power {
+  transform: rotate(18deg);
+}
+
+.shelly-device__action:active .icon-power {
+  transform: scale(0.9);
+}
+
+.icon-power {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  line-height: 1;
+  pointer-events: none;
+  transition: transform 0.25s ease;
+}
+
+.icon-power::before {
+  content: '\23FB';
+  display: block;
+  line-height: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelly-device__action,
+  .icon-power {
+    transition: none;
+  }
+
+  .shelly-device__action:hover {
+    transform: none;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  .shelly-device__action:hover .icon-power,
+  .shelly-device__action:active .icon-power {
+    transform: none;
+  }
 }
 
 .shelly-device__error {
@@ -477,8 +547,7 @@ footer {
 
 .status-refresh button,
 .theme-toggle button,
-.shelly-toolbar button,
-.shelly-device__action {
+.shelly-toolbar button {
   background: var(--button-background);
   color: var(--button-text);
   border: none;
@@ -491,15 +560,13 @@ footer {
 
 .status-refresh button:hover,
 .theme-toggle button:hover,
-.shelly-toolbar button:hover,
-.shelly-device__action:hover {
+.shelly-toolbar button:hover {
   background: var(--button-background-hover);
   transform: translateY(-1px);
 }
 
 .status-refresh button:disabled,
-.shelly-toolbar button:disabled,
-.shelly-device__action:disabled {
+.shelly-toolbar button:disabled {
   background: var(--button-background-disabled);
   cursor: not-allowed;
   opacity: 0.85;
@@ -508,8 +575,7 @@ footer {
 
 .status-refresh button:focus-visible,
 .theme-toggle button:focus-visible,
-.shelly-toolbar button:focus-visible,
-.shelly-device__action:focus-visible {
+.shelly-toolbar button:focus-visible {
   outline: 2px solid var(--button-text);
   outline-offset: 2px;
 }
