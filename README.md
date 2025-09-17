@@ -4,11 +4,11 @@ Prosty panel statusu dla Raspberry Pi napisany w PHP.
 
 ## Tryb ciemny
 
-Interfejs panelu posiada przełącznik trybu ciemnego umieszczony w stopce sekcji
-„Panel stanu Raspberry Pi”. Kliknięcie przycisku natychmiast przełącza klasę
-`theme-dark` na elemencie `<body>` i zapisuje wybrany wariant kolorystyczny w
-`localStorage` przeglądarki. Dzięki temu kolejne odwiedziny automatycznie
-korzystają z ostatnio wybranego motywu.
+Interfejs panelu posiada przełącznik trybu ciemnego umieszczony w górnym
+nagłówku strony. Kliknięcie przycisku natychmiast przełącza klasę `theme-dark`
+na elemencie `<body>` i zapisuje wybrany wariant kolorystyczny w `localStorage`
+przeglądarki. Dzięki temu kolejne odwiedziny automatycznie korzystają z
+ostatnio wybranego motywu.
 
 ## Ochrona dostępu (HTTP Basic Auth)
 
@@ -61,8 +61,9 @@ z poziomu przeglądarki.
 
 - Po zalogowaniu kliknij przycisk **Shelly** w nawigacji kart.
 - Lista urządzeń pokazuje aktualny stan (`Włączone`, `Wyłączone`, bądź komunikat o błędzie).
-- Przekaźniki można przełączyć przyciskami **Włącz**, **Wyłącz** lub **Przełącz**;
-  po każdej akcji stan urządzeń odświeża się automatycznie.
+- Każde urządzenie ma pojedynczy przycisk z ikoną zasilania, który przełącza
+  przekaźnik pomiędzy stanami włącz/wyłącz; po każdej akcji etykieta i stan
+  aktualizują się automatycznie.
 - Błędy połączenia i komunikaty API są wyświetlane w formie czytelnych komunikatów nad listą.
 
 ## Historia metryk
