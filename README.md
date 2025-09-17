@@ -35,6 +35,36 @@ odpowie statusem HTTP `401` oraz nagłówkiem `WWW-Authenticate`, co poinformuje
 przeglądarkę o konieczności podania loginu i hasła. Weryfikacja poświadczeń odbywa się
 przy użyciu funkcji `hash_equals`, dzięki czemu porównanie ma stały czas wykonania.
 
+## Sterowanie Shelly
+
+Panel zawiera dodatkową zakładkę pozwalającą monitorować i przełączać przekaźniki Shelly
+z poziomu przeglądarki.
+
+### Konfiguracja
+
+1. W pliku `config/shelly.php` zdefiniuj urządzenia, podając etykietę i adres URL
+   (np. `http://192.168.0.10`). Domyślnie dołączone są przykłady `boiler` oraz `gate`.
+2. Host można nadpisać zmienną środowiskową `APP_SHELLY_<ID>_HOST`, np.
+   `APP_SHELLY_BOILER_HOST`. Przydatne klucze:
+   - `APP_SHELLY_<ID>_AUTH_KEY` – klucz dostępu (Bearer) do API Shelly,
+   - `APP_SHELLY_<ID>_USERNAME` i `APP_SHELLY_<ID>_PASSWORD` – login i hasło do Basic Auth
+     urządzenia.
+3. Po zmianach pamiętaj o przeładowaniu PHP-FPM / serwera WWW, aby odczytać nową konfigurację.
+
+### Wymagania
+
+- Urządzenia Shelly muszą być osiągalne z serwera (ta sama sieć / przekierowany ruch).
+- Włącz interfejs RPC w oprogramowaniu Shelly oraz ewentualną autoryzację (klucz lub Basic Auth).
+- Dostęp do zakładki zabezpiecza ta sama ochrona HTTP Basic co resztę panelu.
+
+### Użycie
+
+- Po zalogowaniu kliknij przycisk **Shelly** w nawigacji kart.
+- Lista urządzeń pokazuje aktualny stan (`Włączone`, `Wyłączone`, bądź komunikat o błędzie).
+- Przekaźniki można przełączyć przyciskami **Włącz**, **Wyłącz** lub **Przełącz**;
+  po każdej akcji stan urządzeń odświeża się automatycznie.
+- Błędy połączenia i komunikaty API są wyświetlane w formie czytelnych komunikatów nad listą.
+
 ## Historia metryk
 
 Panel może zapisywać kolejne snapshoty stanu do pliku JSON i prezentować historię
