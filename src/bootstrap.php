@@ -9,3 +9,5 @@ require_once __DIR__ . '/services.php';
 require_once __DIR__ . '/history_storage.php';
 require_once __DIR__ . '/status_snapshot.php';
 require_once __DIR__ . '/status_responder.php';
+require_once __DIR__ . '/shelly_rpc.php';
+require_once __DIR__ . '/shelly_responder.php';

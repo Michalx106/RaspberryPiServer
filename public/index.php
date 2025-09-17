@@ -9,6 +9,9 @@ $authConfig = require __DIR__ . '/../config/auth.php';
 /** @var array<string, string> $servicesToCheck */
 $servicesToCheck = require __DIR__ . '/../config/services.php';
 
+/** @var array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $shellyDevices */
+$shellyDevices = require __DIR__ . '/../config/shelly.php';
+
 $authUsername = $authConfig['username'] ?? null;
 $authPassword = $authConfig['password'] ?? null;
 
@@ -45,6 +48,11 @@ if ($authUsername !== null && $authPassword !== null) {
 }
 
 $statusParam = isset($_GET['status']) ? (string) $_GET['status'] : null;
+
+if (handleShellyRequest($shellyDevices)) {
+    return;
+}
+
 if (handleStatusRequest($statusParam, $servicesToCheck)) {
     return;
 }
@@ -72,7 +80,12 @@ $serviceStatuses = $snapshot['services'];
 
   <p>Aktualny czas serwera to: <strong data-role="server-time"><?= h($time); ?></strong></p>
 
-  <section class="status-panel">
+  <div class="tab-navigation" data-role="tabs" role="tablist" aria-label="Sekcje panelu">
+    <button type="button" class="tab-button is-active" data-role="tab" data-tab="status" id="tab-status" role="tab" aria-selected="true" aria-controls="panel-status">Status systemu</button>
+    <button type="button" class="tab-button" data-role="tab" data-tab="shelly" id="tab-shelly" role="tab" aria-selected="false" aria-controls="panel-shelly" tabindex="-1">Shelly</button>
+  </div>
+
+  <section class="status-panel tab-panel is-active" data-role="tab-panel" data-tab-panel="status" id="panel-status" role="tabpanel" aria-labelledby="tab-status">
     <h2>Panel stanu Raspberry Pi</h2>
     <div class="metrics">
       <div class="metric">
@@ -139,6 +152,18 @@ $serviceStatuses = $snapshot['services'];
     </div>
   </section>
 
+  <section class="shelly-panel tab-panel" data-role="tab-panel" data-tab-panel="shelly" id="panel-shelly" role="tabpanel" aria-labelledby="tab-shelly" hidden>
+    <h2>Urządzenia Shelly</h2>
+    <p class="shelly-intro">Steruj przekaźnikami Shelly dostępnych w Twojej sieci domowej bezpośrednio z tego panelu.</p>
+    <div class="shelly-toolbar">
+      <button type="button" data-role="shelly-reload">Odśwież listę</button>
+      <span class="shelly-last-update" data-role="shelly-last-update"></span>
+    </div>
+    <p class="shelly-error" data-role="shelly-error" hidden></p>
+    <p class="shelly-message" data-role="shelly-message">Przełącz na kartę „Shelly”, aby pobrać stan urządzeń.</p>
+    <div class="shelly-list" data-role="shelly-list" aria-live="polite" aria-busy="false"></div>
+  </section>
+
   <footer>
     <p>Miłego dnia! 😊</p>
   </footer>
@@ -151,6 +176,11 @@ $serviceStatuses = $snapshot['services'];
       const REFRESH_INTERVAL = 15000;
       const STREAM_RECONNECT_DELAY = 5000;
       const HISTORY_DEFAULT_LIMIT = 360;
+      const SHELLY_LIST_ENDPOINT = '?shelly=list';
+      const SHELLY_COMMAND_ENDPOINT = '?shelly=command';
+      const STATUS_TAB_ID = 'status';
+      const SHELLY_TAB_ID = 'shelly';
+      const TAB_STORAGE_KEY = 'dashboard-active-tab';
 
       const elements = {
         time: document.querySelector('[data-role="server-time"]'),
@@ -168,6 +198,14 @@ $serviceStatuses = $snapshot['services'];
         historyChart: document.querySelector('[data-role="history-chart"]'),
         historyEmpty: document.querySelector('[data-role="history-empty"]'),
         themeToggle: document.querySelector('[data-role="theme-toggle"]'),
+        tabs: document.querySelector('[data-role="tabs"]'),
+        tabButtons: document.querySelectorAll('[data-role="tab"]'),
+        tabPanels: document.querySelectorAll('[data-role="tab-panel"]'),
+        shellyList: document.querySelector('[data-role="shelly-list"]'),
+        shellyError: document.querySelector('[data-role="shelly-error"]'),
+        shellyMessage: document.querySelector('[data-role="shelly-message"]'),
+        shellyReload: document.querySelector('[data-role="shelly-reload"]'),
+        shellyLastUpdate: document.querySelector('[data-role="shelly-last-update"]'),
       };
 
       const THEME_STORAGE_KEY = 'theme-preference';
@@ -228,8 +266,632 @@ $serviceStatuses = $snapshot['services'];
         applyThemePreference(isDark, storedPreference !== 'dark' && storedPreference !== 'light');
       };
 
+      let currentTab = STATUS_TAB_ID;
+
+      const readActiveTabPreference = () => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return null;
+          }
+          const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+          return typeof stored === 'string' && stored.trim() !== '' ? stored : null;
+        } catch (error) {
+          return null;
+        }
+      };
+
+      const writeActiveTabPreference = (value) => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return;
+          }
+          window.localStorage.setItem(TAB_STORAGE_KEY, value);
+        } catch (error) {
+          // Ignorujemy błędy zapisu.
+        }
+      };
+
+      const setActiveTab = (tabId, persist = false) => {
+        const tabButtons = Array.from(elements.tabButtons || []);
+        const tabPanels = Array.from(elements.tabPanels || []);
+
+        if (tabButtons.length === 0 || tabPanels.length === 0) {
+          currentTab = STATUS_TAB_ID;
+          return currentTab;
+        }
+
+        const normalized = typeof tabId === 'string' && tabId.trim() !== '' ? tabId.trim() : STATUS_TAB_ID;
+
+        let found = false;
+
+        tabButtons.forEach((button) => {
+          const target = button.getAttribute('data-tab');
+          const isActive = target === normalized;
+          if (isActive) {
+            found = true;
+          }
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          button.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+
+        tabPanels.forEach((panel) => {
+          const target = panel.getAttribute('data-tab-panel');
+          const isActive = target === normalized;
+          panel.classList.toggle('is-active', isActive);
+          panel.hidden = !isActive;
+        });
+
+        if (!found && normalized !== STATUS_TAB_ID) {
+          return setActiveTab(STATUS_TAB_ID, persist);
+        }
+
+        const finalTab = found ? normalized : STATUS_TAB_ID;
+        currentTab = finalTab;
+
+        if (persist) {
+          writeActiveTabPreference(finalTab);
+        }
+
+        return finalTab;
+      };
+
+      const initializeTabs = () => {
+        const tabButtons = Array.from(elements.tabButtons || []);
+        if (tabButtons.length === 0) {
+          return;
+        }
+
+        tabButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const target = button.getAttribute('data-tab');
+            if (!target) {
+              return;
+            }
+
+            const active = setActiveTab(target, true);
+            handleTabActivation(active, true);
+          });
+        });
+
+        const stored = readActiveTabPreference();
+        const active = setActiveTab(stored || STATUS_TAB_ID, false);
+        handleTabActivation(active, false);
+      };
+
       const supportsFetch = typeof window.fetch === 'function';
       const supportsEventSource = typeof window.EventSource === 'function';
+
+      const shellyState = {
+        devices: [],
+        loading: false,
+        error: null,
+        hasErrors: false,
+        pending: new Set(),
+        lastUpdated: null,
+        lastAttempt: null,
+        initialized: false,
+        requestId: 0,
+      };
+
+      const setShellyError = (message) => {
+        if (!elements.shellyError) {
+          return;
+        }
+
+        if (typeof message === 'string' && message.trim() !== '') {
+          elements.shellyError.textContent = message;
+          elements.shellyError.hidden = false;
+        } else {
+          elements.shellyError.textContent = '';
+          elements.shellyError.hidden = true;
+        }
+      };
+
+      const setShellyMessage = (message) => {
+        if (!elements.shellyMessage) {
+          return;
+        }
+
+        if (typeof message === 'string' && message.trim() !== '') {
+          elements.shellyMessage.textContent = message;
+          elements.shellyMessage.hidden = false;
+        } else {
+          elements.shellyMessage.textContent = '';
+          elements.shellyMessage.hidden = true;
+        }
+      };
+
+      const updateShellyLastUpdate = () => {
+        if (!elements.shellyLastUpdate) {
+          return;
+        }
+
+        if (shellyState.loading) {
+          elements.shellyLastUpdate.textContent = 'Trwa ładowanie...';
+          return;
+        }
+
+        if (typeof shellyState.lastUpdated === 'string' && shellyState.lastUpdated.trim() !== '') {
+          const parsed = new Date(shellyState.lastUpdated);
+          const formatted = Number.isNaN(parsed.getTime())
+            ? shellyState.lastUpdated
+            : parsed.toLocaleString();
+          elements.shellyLastUpdate.textContent = `Ostatnia aktualizacja: ${formatted}`;
+          return;
+        }
+
+        if (
+          shellyState.error
+          && typeof shellyState.lastAttempt === 'string'
+          && shellyState.lastAttempt.trim() !== ''
+        ) {
+          const attempt = new Date(shellyState.lastAttempt);
+          const formattedAttempt = Number.isNaN(attempt.getTime())
+            ? shellyState.lastAttempt
+            : attempt.toLocaleString();
+          elements.shellyLastUpdate.textContent = `Ostatnia próba: ${formattedAttempt}`;
+          return;
+        }
+
+        elements.shellyLastUpdate.textContent = '';
+      };
+
+      const formatShellyStateLabel = (state) => {
+        switch (state) {
+          case 'on':
+            return 'Włączone';
+          case 'off':
+            return 'Wyłączone';
+          default:
+            return 'Nieznany stan';
+        }
+      };
+
+      const renderShellyDevices = () => {
+        const container = elements.shellyList;
+        if (!container) {
+          return;
+        }
+
+        container.innerHTML = '';
+
+        if (shellyState.loading) {
+          container.classList.add('is-loading');
+        } else {
+          container.classList.remove('is-loading');
+        }
+
+        container.setAttribute('aria-busy', shellyState.loading ? 'true' : 'false');
+
+        if (!shellyState.initialized && !shellyState.loading && !shellyState.error) {
+          setShellyMessage('Przełącz na kartę „Shelly”, aby pobrać stan urządzeń.');
+        }
+
+        if (shellyState.loading) {
+          setShellyMessage('Ładowanie urządzeń Shelly...');
+          setShellyError(null);
+
+          const loader = document.createElement('div');
+          loader.className = 'shelly-loading';
+          loader.setAttribute('role', 'status');
+          loader.setAttribute('aria-live', 'polite');
+          loader.textContent = 'Ładowanie urządzeń Shelly...';
+          container.appendChild(loader);
+
+          updateShellyLastUpdate();
+          return;
+        }
+
+        if (shellyState.error) {
+          setShellyError(shellyState.error);
+        } else {
+          setShellyError(null);
+        }
+
+        if (shellyState.devices.length === 0) {
+          if (!shellyState.error && shellyState.initialized) {
+            setShellyMessage('Brak skonfigurowanych urządzeń Shelly.');
+
+            const empty = document.createElement('p');
+            empty.className = 'shelly-empty';
+            empty.textContent = 'Brak danych do wyświetlenia.';
+            container.appendChild(empty);
+          } else if (shellyState.error) {
+            setShellyMessage('');
+          }
+
+          updateShellyLastUpdate();
+          return;
+        }
+
+        if (!shellyState.error) {
+          if (shellyState.hasErrors) {
+            setShellyMessage('Część urządzeń zgłosiła błąd podczas odczytu stanu.');
+          } else {
+            setShellyMessage('');
+          }
+        }
+
+        shellyState.devices.forEach((device) => {
+          const card = document.createElement('article');
+          card.className = 'shelly-device';
+
+          if (!device.ok) {
+            card.classList.add('has-error');
+          }
+
+          if (shellyState.pending.has(device.id)) {
+            card.classList.add('is-busy');
+          }
+
+          const title = document.createElement('h3');
+          title.className = 'shelly-device__title';
+          title.textContent = device.label || device.id;
+          card.appendChild(title);
+
+          const stateLine = document.createElement('p');
+          stateLine.className = 'shelly-device__state';
+          const stateValue = document.createElement('span');
+          stateValue.className = 'shelly-device__state-value';
+          stateValue.dataset.state = device.state;
+          stateValue.textContent = formatShellyStateLabel(device.state);
+          stateLine.textContent = 'Stan: ';
+          stateLine.appendChild(stateValue);
+          card.appendChild(stateLine);
+
+          if (device.description) {
+            const description = document.createElement('p');
+            description.className = 'shelly-device__description';
+            description.textContent = device.description;
+            card.appendChild(description);
+          }
+
+          const actions = document.createElement('div');
+          actions.className = 'shelly-device__actions';
+          const actionsConfig = [
+            { action: 'on', label: 'Włącz' },
+            { action: 'off', label: 'Wyłącz' },
+            { action: 'toggle', label: 'Przełącz' },
+          ];
+
+          actionsConfig.forEach(({ action, label }) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.role = 'shelly-action';
+            button.dataset.device = device.id;
+            button.dataset.action = action;
+            button.textContent = label;
+            button.classList.add('shelly-device__action');
+
+            if (action === 'toggle') {
+              button.classList.add('is-secondary');
+            }
+
+            if (shellyState.pending.has(device.id)) {
+              button.disabled = true;
+            } else if ((action === 'on' && device.state === 'on') || (action === 'off' && device.state === 'off')) {
+              button.disabled = true;
+            }
+
+            if ((action === 'on' && device.state !== 'on') || (action === 'off' && device.state === 'on')) {
+              button.classList.add('is-primary');
+            }
+
+            actions.appendChild(button);
+          });
+
+          card.appendChild(actions);
+
+          if (device.error) {
+            const errorLine = document.createElement('p');
+            errorLine.className = 'shelly-device__error';
+            errorLine.textContent = `Błąd: ${device.error}`;
+            card.appendChild(errorLine);
+          }
+
+          container.appendChild(card);
+        });
+
+        updateShellyLastUpdate();
+      };
+
+      const loadShellyDevices = (force = false) => {
+        if (!supportsFetch) {
+          setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
+          return;
+        }
+
+        if (shellyState.loading && !force) {
+          return;
+        }
+
+        const requestId = shellyState.requestId + 1;
+        shellyState.requestId = requestId;
+        shellyState.loading = true;
+        shellyState.error = null;
+        shellyState.initialized = true;
+        shellyState.lastAttempt = new Date().toISOString();
+        renderShellyDevices();
+
+        fetch(SHELLY_LIST_ENDPOINT, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response
+                .json()
+                .catch(() => null)
+                .then((data) => {
+                  let message = '';
+                  if (data && typeof data === 'object') {
+                    if (typeof data.error === 'string' && data.error.trim() !== '') {
+                      message = data.error.trim();
+                    }
+                    if (typeof data.message === 'string' && data.message.trim() !== '') {
+                      message = message !== '' ? `${message} - ${data.message.trim()}` : data.message.trim();
+                    }
+                    if (typeof data.description === 'string' && data.description.trim() !== '') {
+                      message = message !== '' ? `${message} - ${data.description.trim()}` : data.description.trim();
+                    }
+                  }
+
+                  if (message === '') {
+                    message = `HTTP ${response.status}`;
+                  }
+
+                  throw new Error(message);
+                });
+            }
+
+            return response.json();
+          })
+          .then((payload) => {
+            if (shellyState.requestId !== requestId) {
+              return;
+            }
+
+            const devicesData = payload && typeof payload === 'object' && Array.isArray(payload.devices)
+              ? payload.devices
+              : [];
+
+            shellyState.devices = devicesData.map((entry, index) => {
+              let id = '';
+              if (entry && typeof entry === 'object') {
+                if (typeof entry.id === 'string' && entry.id.trim() !== '') {
+                  id = entry.id.trim();
+                } else if (typeof entry.id === 'number' || typeof entry.id === 'boolean') {
+                  id = String(entry.id);
+                }
+              }
+
+              if (id === '') {
+                id = `device-${index + 1}`;
+              }
+
+              let label = id;
+              if (entry && typeof entry === 'object' && typeof entry.label === 'string' && entry.label.trim() !== '') {
+                label = entry.label.trim();
+              }
+
+              let state = 'unknown';
+              if (entry && typeof entry === 'object' && typeof entry.state === 'string') {
+                const normalizedState = entry.state.trim().toLowerCase();
+                if (normalizedState !== '') {
+                  state = normalizedState;
+                }
+              }
+
+              let description = '';
+              if (entry && typeof entry === 'object' && typeof entry.description === 'string') {
+                description = entry.description.trim();
+              }
+
+              let error = null;
+              if (entry && typeof entry === 'object' && typeof entry.error === 'string' && entry.error.trim() !== '') {
+                error = entry.error.trim();
+              }
+
+              let ok = true;
+              if (entry && typeof entry === 'object' && typeof entry.ok === 'boolean') {
+                ok = entry.ok;
+              } else if (error !== null) {
+                ok = false;
+              }
+
+              return {
+                id,
+                label,
+                state,
+                description,
+                ok: Boolean(ok),
+                error,
+              };
+            });
+
+            let hasErrors = false;
+            if (payload && typeof payload === 'object' && typeof payload.hasErrors === 'boolean') {
+              hasErrors = payload.hasErrors;
+            }
+
+            shellyState.hasErrors = Boolean(hasErrors) || shellyState.devices.some((device) => !device.ok);
+
+            let generatedAt = null;
+            if (payload && typeof payload === 'object' && typeof payload.generatedAt === 'string') {
+              generatedAt = payload.generatedAt.trim();
+            }
+
+            shellyState.lastUpdated = generatedAt !== '' && generatedAt !== null ? generatedAt : shellyState.lastAttempt;
+            shellyState.error = null;
+            shellyState.loading = false;
+            renderShellyDevices();
+            updateShellyLastUpdate();
+          })
+          .catch((error) => {
+            if (shellyState.requestId !== requestId) {
+              return;
+            }
+
+            shellyState.loading = false;
+            shellyState.devices = [];
+            shellyState.hasErrors = false;
+            const message = error && typeof error.message === 'string' && error.message.trim() !== ''
+              ? error.message.trim()
+              : 'Nie udało się pobrać listy urządzeń Shelly.';
+            shellyState.error = message;
+            renderShellyDevices();
+            updateShellyLastUpdate();
+          });
+      };
+
+      const ensureShellyDataLoaded = (force = false) => {
+        if (!supportsFetch) {
+          return;
+        }
+
+        if (force) {
+          loadShellyDevices(true);
+          return;
+        }
+
+        if (!shellyState.initialized && !shellyState.loading) {
+          loadShellyDevices(false);
+        }
+      };
+
+      const toggleShellyDevice = (deviceId, action) => {
+        if (!supportsFetch) {
+          setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
+          return;
+        }
+
+        const normalizedId = typeof deviceId === 'string' ? deviceId.trim() : '';
+        const normalizedAction = typeof action === 'string' ? action.trim().toLowerCase() : '';
+
+        if (normalizedId === '' || normalizedAction === '') {
+          return;
+        }
+
+        if (shellyState.pending.has(normalizedId)) {
+          return;
+        }
+
+        shellyState.pending.add(normalizedId);
+        shellyState.error = null;
+        setShellyError(null);
+        renderShellyDevices();
+
+        fetch(SHELLY_COMMAND_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            device: normalizedId,
+            action: normalizedAction,
+          }),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response
+                .json()
+                .catch(() => null)
+                .then((data) => {
+                  const messageParts = [];
+                  if (data && typeof data === 'object') {
+                    if (typeof data.error === 'string' && data.error.trim() !== '') {
+                      messageParts.push(data.error.trim());
+                    }
+                    if (typeof data.description === 'string' && data.description.trim() !== '') {
+                      messageParts.push(data.description.trim());
+                    }
+                    if (typeof data.message === 'string' && data.message.trim() !== '') {
+                      messageParts.push(data.message.trim());
+                    }
+                  }
+
+                  if (messageParts.length === 0) {
+                    messageParts.push(`HTTP ${response.status}`);
+                  }
+
+                  throw new Error(messageParts.join(' - '));
+                });
+            }
+
+            return response.json();
+          })
+          .then((payload) => {
+            shellyState.pending.delete(normalizedId);
+
+            if (payload && typeof payload === 'object' && typeof payload.description === 'string') {
+              const trimmedDescription = payload.description.trim();
+              if (trimmedDescription !== '') {
+                setShellyMessage(trimmedDescription);
+              }
+            }
+
+            loadShellyDevices(true);
+          })
+          .catch((error) => {
+            shellyState.pending.delete(normalizedId);
+            const message = error && typeof error.message === 'string' && error.message.trim() !== ''
+              ? error.message.trim()
+              : 'Nie udało się wykonać polecenia Shelly.';
+            shellyState.error = message;
+            setShellyError(message);
+            renderShellyDevices();
+          });
+      };
+
+      const handleShellyActionClick = (event) => {
+        const target = event.target;
+        if (!target || typeof target.closest !== 'function') {
+          return;
+        }
+
+        const button = target.closest('[data-role="shelly-action"]');
+        if (!button) {
+          return;
+        }
+
+        const deviceId = button.getAttribute('data-device');
+        const action = button.getAttribute('data-action');
+
+        if (!deviceId || !action) {
+          return;
+        }
+
+        event.preventDefault();
+        toggleShellyDevice(deviceId, action);
+      };
+
+      function handleTabActivation(tabId, fromUser) {
+        if (tabId === SHELLY_TAB_ID) {
+          if (!supportsFetch) {
+            setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
+            setShellyMessage('Sterowanie Shelly wymaga nowszej przeglądarki.');
+            if (elements.shellyReload) {
+              elements.shellyReload.disabled = true;
+            }
+            return;
+          }
+
+          if (elements.shellyReload) {
+            elements.shellyReload.disabled = false;
+          }
+
+          if (fromUser) {
+            ensureShellyDataLoaded(false);
+          } else {
+            ensureShellyDataLoaded(false);
+          }
+        }
+      }
 
       const historyState = {
         enabled: null,
@@ -1030,6 +1692,24 @@ $serviceStatuses = $snapshot['services'];
           scheduleReconnect();
         });
       };
+
+      renderShellyDevices();
+
+      if (elements.shellyList) {
+        elements.shellyList.addEventListener('click', handleShellyActionClick);
+      }
+
+      if (elements.shellyReload) {
+        elements.shellyReload.addEventListener('click', () => {
+          loadShellyDevices(true);
+        });
+
+        if (!supportsFetch) {
+          elements.shellyReload.disabled = true;
+        }
+      }
+
+      initializeTabs();
 
       if (elements.themeToggle) {
         elements.themeToggle.addEventListener('click', () => {
