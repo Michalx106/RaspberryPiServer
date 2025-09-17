@@ -66,6 +66,19 @@ z poziomu przeglądarki.
   aktualizują się automatycznie.
 - Błędy połączenia i komunikaty API są wyświetlane w formie czytelnych komunikatów nad listą.
 
+### Diagnostyka konfiguracji
+
+Jeśli chcesz ręcznie potwierdzić, że panel poprawnie reaguje na błędną konfigurację
+Shelly (np. po zmianach w środowisku), możesz wykonać prosty test:
+
+1. Ustaw zmienną środowiskową `APP_SHELLY_BOILER_HOST` na niepoprawny adres, np. `http://192.0.2.123`.
+2. Przeładuj usługę PHP-FPM / serwer WWW i odśwież stronę panelu.
+3. Zakładka **Shelly** wyświetli przyjazny komunikat o problemie z konfiguracją, natomiast
+   pozostałe zakładki (status systemu, historia) pozostaną w pełni funkcjonalne.
+
+Takie ręczne odtworzenie scenariusza pozwala upewnić się, że ewentualne błędy
+w konfiguracji Shelly nie wpływają na działanie całego panelu.
+
 ## Historia metryk
 
 Panel może zapisywać kolejne snapshoty stanu do pliku JSON i prezentować historię
