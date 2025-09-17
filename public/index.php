@@ -75,7 +75,12 @@ $serviceStatuses = $snapshot['services'];
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Witaj na mojej stronie! 🎉</h1>
+  <div class="page-header">
+    <h1>Witaj na mojej stronie! 🎉</h1>
+    <div class="theme-toggle theme-toggle--top">
+      <button type="button" data-role="theme-toggle" aria-pressed="false">Włącz tryb ciemny</button>
+    </div>
+  </div>
   <p>Ta strona działa na <strong>Raspberry Pi + Nginx + PHP</strong>.</p>
 
   <p>Aktualny czas serwera to: <strong data-role="server-time"><?= h($time); ?></strong></p>
@@ -142,9 +147,6 @@ $serviceStatuses = $snapshot['services'];
     </p>
 
     <div class="panel-footer">
-      <div class="theme-toggle">
-        <button type="button" data-role="theme-toggle" aria-pressed="false">Włącz tryb ciemny</button>
-      </div>
       <div class="status-refresh" data-role="refresh-container">
         <span data-role="refresh-label">Ostatnie odświeżenie: <?= h($snapshot['generatedAt']); ?></span>
         <button type="button" data-role="refresh-button">Odśwież teraz</button>
