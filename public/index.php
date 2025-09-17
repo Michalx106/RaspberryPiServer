@@ -551,37 +551,33 @@ $serviceStatuses = $snapshot['services'];
 
           const actions = document.createElement('div');
           actions.className = 'shelly-device__actions';
-          const actionsConfig = [
-            { action: 'on', label: 'Włącz' },
-            { action: 'off', label: 'Wyłącz' },
-            { action: 'toggle', label: 'Przełącz' },
-          ];
 
-          actionsConfig.forEach(({ action, label }) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.dataset.role = 'shelly-action';
-            button.dataset.device = device.id;
-            button.dataset.action = action;
-            button.textContent = label;
-            button.classList.add('shelly-device__action');
+          const actionButton = document.createElement('button');
+          const nextAction = device.state === 'on' ? 'off' : 'on';
+          actionButton.type = 'button';
+          actionButton.dataset.role = 'shelly-action';
+          actionButton.dataset.device = device.id;
+          actionButton.dataset.action = nextAction;
+          actionButton.classList.add('shelly-device__action');
+          actionButton.setAttribute('aria-label', 'Przełącz zasilanie');
+          actionButton.setAttribute('aria-pressed', device.state === 'on' ? 'true' : 'false');
+          actionButton.title = nextAction === 'on' ? 'Włącz urządzenie' : 'Wyłącz urządzenie';
 
-            if (action === 'toggle') {
-              button.classList.add('is-secondary');
-            }
+          const icon = document.createElement('span');
+          icon.className = 'icon-power';
+          icon.setAttribute('aria-hidden', 'true');
+          const srText = document.createElement('span');
+          srText.className = 'sr-only';
+          srText.textContent = `${nextAction === 'on' ? 'Włącz' : 'Wyłącz'} urządzenie. Stan: ${formatShellyStateLabel(device.state)}.`;
 
-            if (shellyState.pending.has(device.id)) {
-              button.disabled = true;
-            } else if ((action === 'on' && device.state === 'on') || (action === 'off' && device.state === 'off')) {
-              button.disabled = true;
-            }
+          actionButton.appendChild(icon);
+          actionButton.appendChild(srText);
 
-            if ((action === 'on' && device.state !== 'on') || (action === 'off' && device.state === 'on')) {
-              button.classList.add('is-primary');
-            }
+          if (shellyState.pending.has(device.id)) {
+            actionButton.disabled = true;
+          }
 
-            actions.appendChild(button);
-          });
+          actions.appendChild(actionButton);
 
           card.appendChild(actions);
 
@@ -774,7 +770,20 @@ $serviceStatuses = $snapshot['services'];
         const normalizedId = typeof deviceId === 'string' ? deviceId.trim() : '';
         const normalizedAction = typeof action === 'string' ? action.trim().toLowerCase() : '';
 
-        if (normalizedId === '' || normalizedAction === '') {
+        if (normalizedId === '') {
+          return;
+        }
+
+        const device = shellyState.devices.find((item) => item.id === normalizedId);
+        let finalAction = normalizedAction === 'on' || normalizedAction === 'off'
+          ? normalizedAction
+          : null;
+
+        if (!finalAction && device) {
+          finalAction = device.state === 'on' ? 'off' : 'on';
+        }
+
+        if (finalAction !== 'on' && finalAction !== 'off') {
           return;
         }
 
@@ -795,7 +804,7 @@ $serviceStatuses = $snapshot['services'];
           },
           body: JSON.stringify({
             device: normalizedId,
-            action: normalizedAction,
+            action: finalAction,
           }),
         })
           .then((response) => {
@@ -862,11 +871,22 @@ $serviceStatuses = $snapshot['services'];
         }
 
         const deviceId = button.getAttribute('data-device');
-        const action = button.getAttribute('data-action');
+        let action = button.getAttribute('data-action') || '';
 
-        if (!deviceId || !action) {
+        if (!deviceId) {
           return;
         }
+
+        const device = shellyState.devices.find((item) => item.id === deviceId);
+        if (device) {
+          action = device.state === 'on' ? 'off' : 'on';
+        }
+
+        if (action !== 'on' && action !== 'off') {
+          return;
+        }
+
+        button.dataset.action = action;
 
         event.preventDefault();
         toggleShellyDevice(deviceId, action);
