@@ -9,8 +9,27 @@ $authConfig = require __DIR__ . '/../config/auth.php';
 /** @var array<string, string> $servicesToCheck */
 $servicesToCheck = require __DIR__ . '/../config/services.php';
 
-/** @var array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $shellyDevices */
-$shellyDevices = require __DIR__ . '/../config/shelly.php';
+/**
+ * @var array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $shellyDevices
+ */
+$shellyDevices = [];
+/** @var bool $shellyConfigError */
+$shellyConfigError = false;
+
+try {
+    $shellyConfig = require __DIR__ . '/../config/shelly.php';
+
+    if (!is_array($shellyConfig)) {
+        $type = is_object($shellyConfig) ? get_class($shellyConfig) : gettype($shellyConfig);
+        error_log(sprintf('[Shelly] Plik konfiguracji powinien zwracać tablicę urządzeń, otrzymano: %s', (string) $type));
+        $shellyConfigError = true;
+    } else {
+        $shellyDevices = $shellyConfig;
+    }
+} catch (Throwable $exception) {
+    error_log(sprintf('[Shelly] Błąd wczytywania konfiguracji: %s: %s', get_class($exception), $exception->getMessage()));
+    $shellyConfigError = true;
+}
 
 $authUsername = $authConfig['username'] ?? null;
 $authPassword = $authConfig['password'] ?? null;
@@ -154,7 +173,7 @@ $serviceStatuses = $snapshot['services'];
     </div>
   </section>
 
-  <section class="shelly-panel tab-panel" data-role="tab-panel" data-tab-panel="shelly" id="panel-shelly" role="tabpanel" aria-labelledby="tab-shelly" hidden>
+  <section class="shelly-panel tab-panel" data-role="tab-panel" data-tab-panel="shelly" id="panel-shelly" role="tabpanel" aria-labelledby="tab-shelly" data-shelly-config-error="<?= $shellyConfigError ? 'true' : 'false'; ?>" hidden>
     <h2>Urządzenia Shelly</h2>
     <p class="shelly-intro">Steruj przekaźnikami Shelly dostępnych w Twojej sieci domowej bezpośrednio z tego panelu.</p>
     <div class="shelly-toolbar">
@@ -183,6 +202,8 @@ $serviceStatuses = $snapshot['services'];
       const STATUS_TAB_ID = 'status';
       const SHELLY_TAB_ID = 'shelly';
       const TAB_STORAGE_KEY = 'dashboard-active-tab';
+      const SHELLY_CONFIG_ERROR_MESSAGE = 'Nie udało się wczytać konfiguracji urządzeń Shelly. Sprawdź ustawienia w pliku config/shelly.php.';
+      const SHELLY_CONFIG_ERROR_HINT = 'Panel Shelly jest niedostępny do czasu poprawienia konfiguracji.';
 
       const elements = {
         time: document.querySelector('[data-role="server-time"]'),
@@ -203,12 +224,18 @@ $serviceStatuses = $snapshot['services'];
         tabs: document.querySelector('[data-role="tabs"]'),
         tabButtons: document.querySelectorAll('[data-role="tab"]'),
         tabPanels: document.querySelectorAll('[data-role="tab-panel"]'),
+        shellyPanel: document.querySelector('[data-tab-panel="shelly"]'),
         shellyList: document.querySelector('[data-role="shelly-list"]'),
         shellyError: document.querySelector('[data-role="shelly-error"]'),
         shellyMessage: document.querySelector('[data-role="shelly-message"]'),
         shellyReload: document.querySelector('[data-role="shelly-reload"]'),
         shellyLastUpdate: document.querySelector('[data-role="shelly-last-update"]'),
       };
+
+      const shellyConfigError = Boolean(
+        elements.shellyPanel
+        && elements.shellyPanel.getAttribute('data-shelly-config-error') === 'true'
+      );
 
       const THEME_STORAGE_KEY = 'theme-preference';
 
@@ -375,6 +402,11 @@ $serviceStatuses = $snapshot['services'];
         initialized: false,
         requestId: 0,
       };
+
+      if (shellyConfigError) {
+        shellyState.error = SHELLY_CONFIG_ERROR_MESSAGE;
+        shellyState.initialized = true;
+      }
 
       const setShellyError = (message) => {
         if (!elements.shellyError) {
@@ -595,6 +627,12 @@ $serviceStatuses = $snapshot['services'];
       };
 
       const loadShellyDevices = (force = false) => {
+        if (shellyConfigError) {
+          setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
+          setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
+          return;
+        }
+
         if (!supportsFetch) {
           setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
           return;
@@ -747,6 +785,10 @@ $serviceStatuses = $snapshot['services'];
       };
 
       const ensureShellyDataLoaded = (force = false) => {
+        if (shellyConfigError) {
+          return;
+        }
+
         if (!supportsFetch) {
           return;
         }
@@ -762,6 +804,12 @@ $serviceStatuses = $snapshot['services'];
       };
 
       const toggleShellyDevice = (deviceId, action) => {
+        if (shellyConfigError) {
+          setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
+          setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
+          return;
+        }
+
         if (!supportsFetch) {
           setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
           return;
@@ -894,17 +942,29 @@ $serviceStatuses = $snapshot['services'];
 
       function handleTabActivation(tabId, fromUser) {
         if (tabId === SHELLY_TAB_ID) {
+          if (shellyConfigError) {
+            setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
+            setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
+            if (elements.shellyReload) {
+              elements.shellyReload.disabled = true;
+              elements.shellyReload.setAttribute('aria-disabled', 'true');
+            }
+            return;
+          }
+
           if (!supportsFetch) {
             setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
             setShellyMessage('Sterowanie Shelly wymaga nowszej przeglądarki.');
             if (elements.shellyReload) {
               elements.shellyReload.disabled = true;
+              elements.shellyReload.setAttribute('aria-disabled', 'true');
             }
             return;
           }
 
           if (elements.shellyReload) {
             elements.shellyReload.disabled = false;
+            elements.shellyReload.removeAttribute('aria-disabled');
           }
 
           if (fromUser) {
@@ -1717,17 +1777,34 @@ $serviceStatuses = $snapshot['services'];
 
       renderShellyDevices();
 
-      if (elements.shellyList) {
-        elements.shellyList.addEventListener('click', handleShellyActionClick);
-      }
-
-      if (elements.shellyReload) {
-        elements.shellyReload.addEventListener('click', () => {
-          loadShellyDevices(true);
-        });
-
-        if (!supportsFetch) {
+      if (shellyConfigError) {
+        setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
+        setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
+        if (elements.shellyList) {
+          elements.shellyList.innerHTML = '';
+          elements.shellyList.classList.remove('is-loading');
+          elements.shellyList.setAttribute('aria-busy', 'false');
+        }
+        if (elements.shellyReload) {
           elements.shellyReload.disabled = true;
+          elements.shellyReload.setAttribute('aria-disabled', 'true');
+        }
+      } else {
+        if (elements.shellyList) {
+          elements.shellyList.addEventListener('click', handleShellyActionClick);
+        }
+
+        if (elements.shellyReload) {
+          elements.shellyReload.addEventListener('click', () => {
+            loadShellyDevices(true);
+          });
+
+          if (!supportsFetch) {
+            elements.shellyReload.disabled = true;
+            elements.shellyReload.setAttribute('aria-disabled', 'true');
+          } else {
+            elements.shellyReload.removeAttribute('aria-disabled');
+          }
         }
       }
 
