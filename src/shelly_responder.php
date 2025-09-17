@@ -46,6 +46,18 @@ function respondWithShellyList(array $devices): void
         return;
     }
 
+    if (!function_exists('curl_init')) {
+        sendShellyJsonResponse([
+            'generatedAt' => date(DATE_ATOM),
+            'count' => 0,
+            'hasErrors' => true,
+            'error' => 'environment:missing_curl',
+            'message' => 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.',
+            'devices' => [],
+        ], 500);
+        return;
+    }
+
     $items = [];
     $hasErrors = false;
 
@@ -92,6 +104,14 @@ function respondWithShellyCommand(array $devices): void
             'error' => 'method_not_allowed',
             'message' => 'Ten endpoint obsługuje wyłącznie zapytania POST.',
         ], 405);
+        return;
+    }
+
+    if (!function_exists('curl_init')) {
+        sendShellyJsonResponse([
+            'error' => 'environment:missing_curl',
+            'message' => 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.',
+        ], 500);
         return;
     }
 

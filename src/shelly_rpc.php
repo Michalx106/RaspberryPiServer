@@ -93,6 +93,14 @@ function setShellyRelayState(array $device, string $action): array
  */
 function performShellyRpcRequest(array $device, string $method, array $payload, string $context): array
 {
+    if (!function_exists('curl_init')) {
+        return [
+            'ok' => false,
+            'error' => 'environment:missing_curl',
+            'data' => null,
+        ];
+    }
+
     if (!isset($device['host'])) {
         return [
             'ok' => false,

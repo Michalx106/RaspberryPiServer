@@ -57,6 +57,10 @@ z poziomu przeglądarki.
 - Włącz interfejs RPC w oprogramowaniu Shelly oraz ewentualną autoryzację (klucz lub Basic Auth).
 - Dostęp do zakładki zabezpiecza ta sama ochrona HTTP Basic co resztę panelu.
 
+#### Wymagane rozszerzenia PHP
+
+- Moduł Shelly wykorzystuje funkcje biblioteki cURL, dlatego na serwerze musi być zainstalowane rozszerzenie `php-curl`.
+
 ### Użycie
 
 - Po zalogowaniu kliknij przycisk **Shelly** w nawigacji kart.
