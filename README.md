@@ -101,10 +101,13 @@ Możesz dostosować zachowanie za pomocą zmiennych środowiskowych:
   będą usuwane podczas kolejnych zapisów.
 - `APP_HISTORY_MIN_INTERVAL` – minimalny odstęp (w sekundach) pomiędzy kolejnymi zapisami
   historii. Domyślnie 60 sekund; ustaw `0`, aby zapisywać każdy snapshot niezależnie od czasu.
+  Snapshots otrzymane przed upływem tego interwału są pomijane – ostatni zapis pozostaje
+  niezmieniony, a nowy wpis pojawi się dopiero, gdy kolejne dane napłyną po przekroczeniu progu.
 
-Jeżeli nowy snapshot pojawi się szybciej niż wynika to z ustawienia `APP_HISTORY_MIN_INTERVAL`,
-aplikacja zaktualizuje ostatni rekord zamiast dopisywać kolejny. Dzięki temu historia zachowuje
-regularne odstępy czasowe i nie rozrasta się gwałtownie podczas częstego odpytywania.
+Dzięki temu historia zachowuje regularne odstępy czasowe i nie rozrasta się gwałtownie podczas
+częstego odpytywania. Trzeba jednak pamiętać, że dostępne rekordy mogą być starsze maksymalnie o
+ustawiony interwał, ponieważ wszystkie próbki otrzymane w krótszych odstępach czasu nie trafiają
+do pliku.
 
 Katalog `var/` zawiera plik `.gitignore`, dzięki czemu dane historii nie trafiają do repozytorium.
 
