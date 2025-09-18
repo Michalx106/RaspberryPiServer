@@ -57,6 +57,16 @@ z poziomu przeglądarki.
 - Włącz interfejs RPC w oprogramowaniu Shelly oraz ewentualną autoryzację (klucz lub Basic Auth).
 - Dostęp do zakładki zabezpiecza ta sama ochrona HTTP Basic co resztę panelu.
 
+### Bezpieczeństwo (CSRF)
+
+- Podczas ładowania panelu generowany jest unikalny token CSRF zapisywany w ciasteczku `panel_csrf` (ważnym przez godzinę) oraz
+  wstawiany do kodu HTML.
+- Skrypty front-endu automatycznie dołączają token do wywołań `?shelly=list` i `?shelly=command` w nagłówku `X-CSRF-Token`
+  (oraz jako pole `csrfToken` w JSON-ie polecenia).
+- Backend porównuje token z ciasteczkiem i odrzuca żądania bez poprawnego identyfikatora, odpowiadając statusem HTTP `403`.
+- Dodatkowo weryfikowany jest nagłówek `Origin`, więc polecenia muszą pochodzić bezpośrednio z panelu.
+- Jeśli panel zgłosi błąd tokenu, odśwież stronę, aby wygenerować nową wartość i kontynuować pracę.
+
 #### Wymagane rozszerzenia PHP
 
 - Moduł Shelly wykorzystuje funkcje biblioteki cURL, dlatego na serwerze musi być zainstalowane rozszerzenie `php-curl`.
