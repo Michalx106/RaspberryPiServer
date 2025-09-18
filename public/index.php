@@ -76,6 +76,36 @@ if (handleStatusRequest($statusParam, $servicesToCheck)) {
     return;
 }
 
+$csrfToken = null;
+
+try {
+    $csrfToken = bin2hex(random_bytes(32));
+} catch (Throwable $exception) {
+    error_log(sprintf('[CSRF] Nie udało się wygenerować bezpiecznego tokenu: %s: %s', get_class($exception), $exception->getMessage()));
+}
+
+if ($csrfToken === null || $csrfToken === '') {
+    $csrfToken = hash('sha256', uniqid((string) mt_rand(), true));
+}
+
+$isHttps = (
+    (isset($_SERVER['HTTPS']) && is_string($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off' && $_SERVER['HTTPS'] !== '')
+    || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)
+    || (
+        isset($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && is_string($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && stripos($_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false
+    )
+);
+
+setcookie('panel_csrf', $csrfToken, [
+    'expires' => time() + 3600,
+    'path' => '/',
+    'secure' => $isHttps,
+    'httponly' => false,
+    'samesite' => 'Strict',
+]);
+
 $snapshot = collectStatusSnapshot($servicesToCheck);
 
 $time = $snapshot['time'];
@@ -93,7 +123,7 @@ $serviceStatuses = $snapshot['services'];
   <title>Moja strona na Raspberry Pi</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-csrf-token="<?= h($csrfToken); ?>">
   <div class="page-header">
     <h1>Witaj na mojej stronie! 🎉</h1>
     <div class="theme-toggle theme-toggle--top">
@@ -204,6 +234,7 @@ $serviceStatuses = $snapshot['services'];
       const TAB_STORAGE_KEY = 'dashboard-active-tab';
       const SHELLY_CONFIG_ERROR_MESSAGE = 'Nie udało się wczytać konfiguracji urządzeń Shelly. Sprawdź ustawienia w pliku config/shelly.php.';
       const SHELLY_CONFIG_ERROR_HINT = 'Panel Shelly jest niedostępny do czasu poprawienia konfiguracji.';
+      const CSRF_TOKEN = document.body && document.body.dataset ? document.body.dataset.csrfToken || '' : '';
 
       const elements = {
         time: document.querySelector('[data-role="server-time"]'),
@@ -650,12 +681,19 @@ $serviceStatuses = $snapshot['services'];
         shellyState.lastAttempt = new Date().toISOString();
         renderShellyDevices();
 
+        const shellyListHeaders = {
+          Accept: 'application/json',
+        };
+
+        if (CSRF_TOKEN) {
+          shellyListHeaders['X-CSRF-Token'] = CSRF_TOKEN;
+        }
+
         fetch(SHELLY_LIST_ENDPOINT, {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
+          headers: shellyListHeaders,
           cache: 'no-store',
+          credentials: 'same-origin',
         })
           .then((response) => {
             if (!response.ok) {
@@ -844,16 +882,26 @@ $serviceStatuses = $snapshot['services'];
         setShellyError(null);
         renderShellyDevices();
 
+        const shellyCommandHeaders = {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        };
+
+        const shellyCommandPayload = {
+          device: normalizedId,
+          action: finalAction,
+        };
+
+        if (CSRF_TOKEN) {
+          shellyCommandHeaders['X-CSRF-Token'] = CSRF_TOKEN;
+          shellyCommandPayload.csrfToken = CSRF_TOKEN;
+        }
+
         fetch(SHELLY_COMMAND_ENDPOINT, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            device: normalizedId,
-            action: finalAction,
-          }),
+          headers: shellyCommandHeaders,
+          body: JSON.stringify(shellyCommandPayload),
+          credentials: 'same-origin',
         })
           .then((response) => {
             if (!response.ok) {

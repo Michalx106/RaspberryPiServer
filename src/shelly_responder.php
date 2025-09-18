@@ -46,6 +46,10 @@ function respondWithShellyList(array $devices): void
         return;
     }
 
+    if (!ensureShellyRequestSecurity()) {
+        return;
+    }
+
     if (!function_exists('curl_init')) {
         sendShellyJsonResponse([
             'generatedAt' => date(DATE_ATOM),
@@ -107,14 +111,6 @@ function respondWithShellyCommand(array $devices): void
         return;
     }
 
-    if (!function_exists('curl_init')) {
-        sendShellyJsonResponse([
-            'error' => 'environment:missing_curl',
-            'message' => 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.',
-        ], 500);
-        return;
-    }
-
     $rawBody = (string) file_get_contents('php://input');
     $decoded = json_decode($rawBody, true);
 
@@ -123,6 +119,18 @@ function respondWithShellyCommand(array $devices): void
             'error' => 'invalid_payload',
             'message' => 'Nieprawidłowe dane JSON.',
         ], 400);
+        return;
+    }
+
+    if (!ensureShellyRequestSecurity($decoded)) {
+        return;
+    }
+
+    if (!function_exists('curl_init')) {
+        sendShellyJsonResponse([
+            'error' => 'environment:missing_curl',
+            'message' => 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.',
+        ], 500);
         return;
     }
 
@@ -208,4 +216,141 @@ function sendShellyJsonResponse(array $payload, int $statusCode = 200): void
     http_response_code($statusCode);
 
     echo $encoded;
+}
+
+/**
+ * @param array<mixed>|null $payload
+ */
+function ensureShellyRequestSecurity(?array $payload = null): bool
+{
+    if (!isShellyOriginAllowed()) {
+        sendShellyJsonResponse([
+            'error' => 'invalid_origin',
+            'message' => 'Nieprawidłowy nagłówek Origin.',
+        ], 403);
+
+        return false;
+    }
+
+    $cookieToken = isset($_COOKIE['panel_csrf']) ? trim((string) $_COOKIE['panel_csrf']) : '';
+
+    if ($cookieToken === '') {
+        sendShellyJsonResponse([
+            'error' => 'invalid_csrf_token',
+            'message' => 'Brak tokenu CSRF. Odśwież stronę panelu.',
+        ], 403);
+
+        return false;
+    }
+
+    $providedTokens = [];
+
+    if (isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+        $headerToken = trim((string) $_SERVER['HTTP_X_CSRF_TOKEN']);
+        if ($headerToken !== '') {
+            $providedTokens[] = $headerToken;
+        }
+    }
+
+    if ($payload !== null && isset($payload['csrfToken'])) {
+        $payloadToken = trim((string) $payload['csrfToken']);
+        if ($payloadToken !== '') {
+            $providedTokens[] = $payloadToken;
+        }
+    }
+
+    foreach ($providedTokens as $candidate) {
+        if (hash_equals($cookieToken, $candidate)) {
+            return true;
+        }
+    }
+
+    sendShellyJsonResponse([
+        'error' => 'invalid_csrf_token',
+        'message' => 'Nieprawidłowy token CSRF. Odśwież stronę panelu.',
+    ], 403);
+
+    return false;
+}
+
+function isShellyOriginAllowed(): bool
+{
+    if (!isset($_SERVER['HTTP_ORIGIN'])) {
+        return true;
+    }
+
+    $originRaw = $_SERVER['HTTP_ORIGIN'];
+    if (!is_string($originRaw)) {
+        return false;
+    }
+
+    $origin = strtolower(trim($originRaw));
+
+    if ($origin === '') {
+        return false;
+    }
+
+    $hosts = [];
+
+    if (isset($_SERVER['HTTP_HOST']) && is_string($_SERVER['HTTP_HOST'])) {
+        $hosts[] = strtolower(trim($_SERVER['HTTP_HOST']));
+    }
+
+    if (isset($_SERVER['HTTP_X_FORWARDED_HOST']) && is_string($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+        $forwardedHosts = explode(',', $_SERVER['HTTP_X_FORWARDED_HOST']);
+        foreach ($forwardedHosts as $forwardedHost) {
+            $normalized = strtolower(trim($forwardedHost));
+            if ($normalized !== '') {
+                $hosts[] = $normalized;
+            }
+        }
+    }
+
+    if (isset($_SERVER['SERVER_NAME']) && is_string($_SERVER['SERVER_NAME'])) {
+        $hosts[] = strtolower(trim($_SERVER['SERVER_NAME']));
+    }
+
+    $hosts = array_values(array_unique(array_filter($hosts, static function ($value): bool {
+        return is_string($value) && $value !== '';
+    })));
+
+    if (count($hosts) === 0) {
+        return true;
+    }
+
+    $schemes = [];
+
+    if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && is_string($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        $protoParts = explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO']);
+        foreach ($protoParts as $part) {
+            $normalized = strtolower(trim($part));
+            if ($normalized === 'https' || $normalized === 'http') {
+                $schemes[] = $normalized;
+            }
+        }
+    }
+
+    if (isset($_SERVER['HTTPS']) && is_string($_SERVER['HTTPS'])) {
+        $httpsValue = strtolower(trim($_SERVER['HTTPS']));
+        if ($httpsValue !== '' && $httpsValue !== 'off') {
+            $schemes[] = 'https';
+        }
+    }
+
+    if (count($schemes) === 0) {
+        $schemes[] = 'http';
+    }
+
+    $schemes = array_values(array_unique($schemes));
+
+    foreach ($hosts as $host) {
+        foreach ($schemes as $scheme) {
+            $candidate = sprintf('%s://%s', $scheme, $host);
+            if (hash_equals($candidate, $origin)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
