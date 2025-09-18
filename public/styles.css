@@ -591,9 +591,45 @@ footer {
 }
 
 .history-container h3 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: var(--panel-heading);
   font-size: 18px;
+}
+
+.history-metric-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.history-metric-button {
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--status-note);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.history-metric-button:hover {
+  background: var(--metric-background);
+  color: var(--panel-heading);
+}
+
+.history-metric-button.is-active {
+  background: var(--button-background);
+  border-color: transparent;
+  color: var(--button-text);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.history-metric-button:focus-visible {
+  outline: 2px solid var(--button-background);
+  outline-offset: 2px;
 }
 
 .history-chart {

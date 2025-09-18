@@ -165,7 +165,13 @@ $serviceStatuses = $snapshot['services'];
     </div>
 
     <div class="history-container" data-role="history-container">
-      <h3>Historia temperatury CPU</h3>
+      <h3 data-role="history-title">Historia temperatury CPU</h3>
+      <div class="history-metric-switch" data-role="history-metric-switch" role="group" aria-label="Wybór metryki historii">
+        <button type="button" class="history-metric-button is-active" data-role="history-metric" data-metric="cpuTemperature" aria-pressed="true">Temperatura</button>
+        <button type="button" class="history-metric-button" data-role="history-metric" data-metric="memoryUsage" aria-pressed="false">Pamięć</button>
+        <button type="button" class="history-metric-button" data-role="history-metric" data-metric="diskUsage" aria-pressed="false">Dysk</button>
+        <button type="button" class="history-metric-button" data-role="history-metric" data-metric="systemLoad" aria-pressed="false">Obciążenie</button>
+      </div>
       <div class="history-chart" data-role="history-chart-wrapper">
         <svg data-role="history-chart" viewBox="0 0 600 260" role="img" aria-label="Historia temperatury CPU"></svg>
 
@@ -227,11 +233,13 @@ $serviceStatuses = $snapshot['services'];
       const REFRESH_INTERVAL = 15000;
       const STREAM_RECONNECT_DELAY = 5000;
       const HISTORY_DEFAULT_LIMIT = 360;
+      const HISTORY_DEFAULT_METRIC = 'cpuTemperature';
       const SHELLY_LIST_ENDPOINT = '?shelly=list';
       const SHELLY_COMMAND_ENDPOINT = '?shelly=command';
       const STATUS_TAB_ID = 'status';
       const SHELLY_TAB_ID = 'shelly';
       const TAB_STORAGE_KEY = 'dashboard-active-tab';
+      const HISTORY_METRIC_STORAGE_KEY = 'dashboard-history-metric';
       const SHELLY_CONFIG_ERROR_MESSAGE = 'Nie udało się wczytać konfiguracji urządzeń Shelly. Sprawdź ustawienia w pliku config/shelly.php.';
       const SHELLY_CONFIG_ERROR_HINT = 'Panel Shelly jest niedostępny do czasu poprawienia konfiguracji.';
       const CSRF_TOKEN = document.body && document.body.dataset ? document.body.dataset.csrfToken || '' : '';
@@ -250,6 +258,8 @@ $serviceStatuses = $snapshot['services'];
         historyContainer: document.querySelector('[data-role="history-container"]'),
         historyChartWrapper: document.querySelector('[data-role="history-chart-wrapper"]'),
         historyChart: document.querySelector('[data-role="history-chart"]'),
+        historyTitle: document.querySelector('[data-role="history-title"]'),
+        historyMetricButtons: document.querySelectorAll('[data-role="history-metric"]'),
         historyEmpty: document.querySelector('[data-role="history-empty"]'),
         themeToggle: document.querySelector('[data-role="theme-toggle"]'),
         tabs: document.querySelector('[data-role="tabs"]'),
@@ -348,6 +358,29 @@ $serviceStatuses = $snapshot['services'];
           window.localStorage.setItem(TAB_STORAGE_KEY, value);
         } catch (error) {
           // Ignorujemy błędy zapisu.
+        }
+      };
+
+      const readHistoryMetricPreference = () => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return null;
+          }
+          const stored = window.localStorage.getItem(HISTORY_METRIC_STORAGE_KEY);
+          return typeof stored === 'string' && stored.trim() !== '' ? stored : null;
+        } catch (error) {
+          return null;
+        }
+      };
+
+      const writeHistoryMetricPreference = (value) => {
+        try {
+          if (typeof window.localStorage === 'undefined') {
+            return;
+          }
+          window.localStorage.setItem(HISTORY_METRIC_STORAGE_KEY, value);
+        } catch (error) {
+          // Ignorujemy błędy zapisu (np. tryb prywatny).
         }
       };
 
@@ -1029,6 +1062,7 @@ $serviceStatuses = $snapshot['services'];
         maxEntries: null,
         limit: null,
         chartSignature: null,
+        metric: HISTORY_DEFAULT_METRIC,
 
       };
 
@@ -1137,6 +1171,20 @@ $serviceStatuses = $snapshot['services'];
         return `${value.toFixed(1)} °C`;
       };
 
+      const formatPercentageValue = (value) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          return '';
+        }
+        return `${value.toFixed(1)} %`;
+      };
+
+      const formatLoadAverageValue = (value) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          return '';
+        }
+        return value.toFixed(2);
+      };
+
       const formatHistoryEntryTime = (entry) => {
         if (!entry || typeof entry !== 'object') {
           return '—';
@@ -1156,12 +1204,247 @@ $serviceStatuses = $snapshot['services'];
         return '—';
       };
 
-      const renderHistoryChart = (entries) => {
+      const HISTORY_METRICS = [
+        {
+          id: 'cpuTemperature',
+          label: 'Temperatura CPU',
+          axisLabel: 'Temperatura CPU (°C)',
+          description: 'Wizualizacja historii temperatury CPU.',
+          formatValue: formatTemperatureValue,
+          getValue: (entry) => {
+            if (!entry || typeof entry !== 'object') {
+              return null;
+            }
+            const value = entry.cpuTemperatureValue;
+            return typeof value === 'number' && Number.isFinite(value) ? value : null;
+          },
+          getTooltipLabel: (entry, value) => {
+            if (entry && typeof entry.cpuTemperatureLabel === 'string' && entry.cpuTemperatureLabel.trim() !== '') {
+              return entry.cpuTemperatureLabel.trim();
+            }
+            const formatted = formatTemperatureValue(value);
+            if (formatted && formatted.trim() !== '') {
+              return formatted;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return `${value.toFixed(1)} °C`;
+            }
+            return 'Brak danych';
+          },
+        },
+        {
+          id: 'memoryUsage',
+          label: 'Użycie pamięci RAM',
+          axisLabel: 'Użycie pamięci (%)',
+          description: 'Wizualizacja historii zużycia pamięci RAM.',
+          formatValue: formatPercentageValue,
+          getValue: (entry) => {
+            if (!entry || typeof entry !== 'object' || !entry.memoryUsage || typeof entry.memoryUsage !== 'object') {
+              return null;
+            }
+            const value = entry.memoryUsage.percentage;
+            return typeof value === 'number' && Number.isFinite(value) ? value : null;
+          },
+          getTooltipLabel: (entry, value) => {
+            if (
+              entry
+              && entry.memoryUsage
+              && typeof entry.memoryUsage === 'object'
+              && typeof entry.memoryUsage.label === 'string'
+              && entry.memoryUsage.label.trim() !== ''
+            ) {
+              return entry.memoryUsage.label.trim();
+            }
+            const formatted = formatPercentageValue(value);
+            if (formatted && formatted.trim() !== '') {
+              return formatted;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return `${value.toFixed(1)} %`;
+            }
+            return 'Brak danych';
+          },
+        },
+        {
+          id: 'diskUsage',
+          label: 'Użycie dysku',
+          axisLabel: 'Użycie dysku (%)',
+          description: 'Wizualizacja historii zajętości dysku.',
+          formatValue: formatPercentageValue,
+          getValue: (entry) => {
+            if (!entry || typeof entry !== 'object' || !entry.diskUsage || typeof entry.diskUsage !== 'object') {
+              return null;
+            }
+            const value = entry.diskUsage.percentage;
+            return typeof value === 'number' && Number.isFinite(value) ? value : null;
+          },
+          getTooltipLabel: (entry, value) => {
+            if (
+              entry
+              && entry.diskUsage
+              && typeof entry.diskUsage === 'object'
+              && typeof entry.diskUsage.label === 'string'
+              && entry.diskUsage.label.trim() !== ''
+            ) {
+              return entry.diskUsage.label.trim();
+            }
+            const formatted = formatPercentageValue(value);
+            if (formatted && formatted.trim() !== '') {
+              return formatted;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return `${value.toFixed(1)} %`;
+            }
+            return 'Brak danych';
+          },
+        },
+        {
+          id: 'systemLoad',
+          label: 'Obciążenie systemu',
+          axisLabel: 'Obciążenie (1 min)',
+          description: 'Wizualizacja historii obciążenia systemu (średnia z ostatniej minuty).',
+          formatValue: formatLoadAverageValue,
+          getValue: (entry) => {
+            if (!entry || typeof entry !== 'object' || !entry.systemLoad || typeof entry.systemLoad !== 'object') {
+              return null;
+            }
+            const value = entry.systemLoad.one;
+            return typeof value === 'number' && Number.isFinite(value) ? value : null;
+          },
+          getTooltipLabel: (entry, value) => {
+            if (
+              entry
+              && entry.systemLoad
+              && typeof entry.systemLoad === 'object'
+              && typeof entry.systemLoad.label === 'string'
+              && entry.systemLoad.label.trim() !== ''
+            ) {
+              return entry.systemLoad.label.trim();
+            }
+            const formatted = formatLoadAverageValue(value);
+            if (formatted && formatted.trim() !== '') {
+              return `1 min: ${formatted}`;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return `1 min: ${value.toFixed(2)}`;
+            }
+            return 'Brak danych';
+          },
+        },
+      ];
+
+      const HISTORY_METRIC_MAP = HISTORY_METRICS.reduce((map, metric) => {
+        map[metric.id] = metric;
+        return map;
+      }, {});
+
+      const getHistoryMetricDefinition = (metricId) => HISTORY_METRIC_MAP[metricId] || HISTORY_METRICS[0];
+
+      const formatMetricValue = (metric, value) => {
+        if (!metric) {
+          return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+        }
+        const formatted = metric.formatValue(value);
+        if (typeof formatted === 'string' && formatted.trim() !== '') {
+          return formatted;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return String(value);
+        }
+        return '';
+      };
+
+      const setHistoryMetricState = (metricDefinition, options = {}) => {
+        const { persist = false } = options;
+        if (!metricDefinition || typeof metricDefinition !== 'object') {
+          return { changed: false, label: 'Metryka' };
+        }
+
+        const label = typeof metricDefinition.label === 'string' && metricDefinition.label.trim() !== ''
+          ? metricDefinition.label.trim()
+          : 'Metryka';
+        const previousMetric = historyState.metric;
+        const normalizedId = typeof metricDefinition.id === 'string' && metricDefinition.id.trim() !== ''
+          ? metricDefinition.id.trim()
+          : HISTORY_DEFAULT_METRIC;
+
+        historyState.metric = normalizedId;
+
+        const metricChanged = previousMetric !== normalizedId;
+        if (metricChanged) {
+          historyState.chartSignature = null;
+        }
+
+        if (persist) {
+          writeHistoryMetricPreference(normalizedId);
+        }
+
+        if (elements.historyChart) {
+          elements.historyChart.setAttribute('aria-label', `Historia: ${label}`);
+        }
+
+        if (elements.historyTitle) {
+          elements.historyTitle.textContent = `Historia: ${label}`;
+        }
+
+        const metricButtons = Array.from(elements.historyMetricButtons || []);
+        metricButtons.forEach((button) => {
+          if (!button || typeof button !== 'object') {
+            return;
+          }
+          button.setAttribute('type', 'button');
+          const target = button.getAttribute('data-metric');
+          const isActive = target === normalizedId;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        return { changed: metricChanged, label };
+      };
+
+      const changeHistoryMetric = (metricId, persist = true) => {
+        const metricDefinition = getHistoryMetricDefinition(metricId);
+        setHistoryMetricState(metricDefinition, { persist });
+        updateHistoryChart();
+      };
+
+      const initializeHistoryMetricSwitch = () => {
+        const storedPreference = readHistoryMetricPreference();
+        const metricDefinition = getHistoryMetricDefinition(storedPreference || historyState.metric);
+        setHistoryMetricState(metricDefinition);
+
+        const metricButtons = Array.from(elements.historyMetricButtons || []);
+        if (metricButtons.length === 0) {
+          return;
+        }
+
+        metricButtons.forEach((button) => {
+          if (!button || typeof button !== 'object') {
+            return;
+          }
+          button.setAttribute('type', 'button');
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            const target = button.getAttribute('data-metric');
+            if (typeof target !== 'string' || target.trim() === '') {
+              return;
+            }
+            changeHistoryMetric(target.trim(), true);
+          });
+        });
+      };
+
+      const renderHistoryChart = (entries, metricId) => {
         const svg = elements.historyChart;
         if (!svg) {
           return false;
         }
         if (typeof SVGElement !== 'undefined' && !(svg instanceof SVGElement)) {
+          return false;
+        }
+
+        const metric = getHistoryMetricDefinition(metricId);
+        if (!metric) {
           return false;
         }
 
@@ -1173,7 +1456,11 @@ $serviceStatuses = $snapshot['services'];
           return false;
         }
 
-        const values = entries.map((entry) => entry.cpuTemperatureValue);
+        const values = entries.map((entry) => metric.getValue(entry));
+        if (values.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+          return false;
+        }
+
         const minValue = Math.min(...values);
         const maxValue = Math.max(...values);
 
@@ -1214,7 +1501,7 @@ $serviceStatuses = $snapshot['services'];
         const baseXEnd = width - padding.right;
 
         const desc = createSvgElement('desc');
-        desc.textContent = 'Wizualizacja historii temperatury CPU.';
+        desc.textContent = metric.description || 'Wizualizacja historii metryki.';
         svg.appendChild(desc);
 
         const gridGroup = createSvgElement('g', { class: 'history-grid' });
@@ -1238,7 +1525,7 @@ $serviceStatuses = $snapshot['services'];
             'text-anchor': 'end',
             'dominant-baseline': 'middle',
           });
-          label.textContent = formatTemperatureValue(value);
+          label.textContent = formatMetricValue(metric, value);
           gridGroup.appendChild(label);
         }
         svg.appendChild(gridGroup);
@@ -1268,7 +1555,7 @@ $serviceStatuses = $snapshot['services'];
           class: 'history-axis-label history-axis-label--title',
           'text-anchor': 'start',
         });
-        axisTitle.textContent = 'Temperatura CPU [°C]';
+        axisTitle.textContent = metric.axisLabel || metric.label || 'Metryka';
         axisGroup.appendChild(axisTitle);
 
         const summary = createSvgElement('text', {
@@ -1277,7 +1564,7 @@ $serviceStatuses = $snapshot['services'];
           class: 'history-axis-label history-axis-label--summary',
           'text-anchor': 'end',
         });
-        summary.textContent = `Min: ${formatTemperatureValue(minValue)} · Max: ${formatTemperatureValue(maxValue)}`;
+        summary.textContent = `Min: ${formatMetricValue(metric, minValue)} · Max: ${formatMetricValue(metric, maxValue)}`;
         axisGroup.appendChild(summary);
 
         svg.appendChild(axisGroup);
@@ -1285,13 +1572,14 @@ $serviceStatuses = $snapshot['services'];
         const points = entries.map((entry, index) => {
           const ratio = entries.length > 1 ? index / (entries.length - 1) : 0.5;
           const x = padding.left + (innerWidth * ratio);
-          let normalized = (entry.cpuTemperatureValue - chartMin) / range;
+          const value = values[index];
+          let normalized = (value - chartMin) / range;
           if (!Number.isFinite(normalized)) {
             normalized = 0;
           }
           normalized = Math.max(0, Math.min(1, normalized));
           const y = padding.top + innerHeight - (normalized * innerHeight);
-          return { x, y, entry };
+          return { x, y, entry, value };
         });
 
         let areaPath = `M ${points[0].x.toFixed(2)} ${baseY.toFixed(2)}`;
@@ -1324,10 +1612,11 @@ $serviceStatuses = $snapshot['services'];
             class: 'history-dot',
           });
           const title = createSvgElement('title');
-          const label = typeof point.entry.cpuTemperatureLabel === 'string'
-            ? point.entry.cpuTemperatureLabel
-            : formatTemperatureValue(point.entry.cpuTemperatureValue);
-          title.textContent = `${label} (${formatHistoryEntryTime(point.entry)})`;
+          const tooltipLabel = metric.getTooltipLabel(point.entry, point.value);
+          const tooltip = typeof tooltipLabel === 'string' && tooltipLabel.trim() !== ''
+            ? tooltipLabel.trim()
+            : (formatMetricValue(metric, point.value) || 'Brak danych');
+          title.textContent = `${tooltip} (${formatHistoryEntryTime(point.entry)})`;
           circle.appendChild(title);
           dotsGroup.appendChild(circle);
         });
@@ -1371,6 +1660,208 @@ $serviceStatuses = $snapshot['services'];
         const normalized = match[1].replace(',', '.');
         const parsed = Number.parseFloat(normalized);
         return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const parsePercentageValue = (value) => {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return value;
+        }
+        if (typeof value !== 'string') {
+          return null;
+        }
+        const match = value.match(/(-?\d+(?:[\.,]\d+)?)\s*%/);
+        if (!match) {
+          return null;
+        }
+        const normalized = match[1].replace(',', '.');
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const parseSystemLoadValues = (value) => {
+        const result = { one: null, five: null, fifteen: null };
+        if (typeof value !== 'string') {
+          return result;
+        }
+        const trimmed = value.trim();
+        if (trimmed === '') {
+          return result;
+        }
+
+        const matchValue = (pattern) => {
+          const match = trimmed.match(pattern);
+          if (!match) {
+            return null;
+          }
+          const normalized = match[1].replace(',', '.');
+          const parsed = Number.parseFloat(normalized);
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        result.one = matchValue(/1\s*min\s*:\s*([\d\.,]+)/i);
+        result.five = matchValue(/5\s*min\s*:\s*([\d\.,]+)/i);
+        result.fifteen = matchValue(/15\s*min\s*:\s*([\d\.,]+)/i);
+
+        if (result.one === null || result.five === null || result.fifteen === null) {
+          const matches = trimmed.match(/(-?\d+(?:[\.,]\d+)?)/g);
+          if (matches && matches.length >= 3) {
+            const numbers = matches.slice(0, 3).map((item) => {
+              const normalizedNumber = item.replace(',', '.');
+              const parsed = Number.parseFloat(normalizedNumber);
+              return Number.isFinite(parsed) ? parsed : null;
+            });
+            const [first, second, third] = numbers;
+            if (result.one === null && typeof first === 'number' && Number.isFinite(first)) {
+              result.one = first;
+            }
+            if (result.five === null && typeof second === 'number' && Number.isFinite(second)) {
+              result.five = second;
+            }
+            if (result.fifteen === null && typeof third === 'number' && Number.isFinite(third)) {
+              result.fifteen = third;
+            }
+          }
+        }
+
+        return result;
+      };
+
+      const normalizePercentageMetric = (entry, key) => {
+        const result = { percentage: null, label: null };
+
+        if (!entry || typeof entry !== 'object') {
+          return result;
+        }
+
+        const rawMetric = entry[key];
+
+        if (rawMetric && typeof rawMetric === 'object' && !Array.isArray(rawMetric)) {
+          if (typeof rawMetric.label === 'string' && rawMetric.label.trim() !== '') {
+            result.label = rawMetric.label.trim();
+          }
+          if (typeof rawMetric.percentage === 'number' && Number.isFinite(rawMetric.percentage)) {
+            result.percentage = rawMetric.percentage;
+          }
+        } else if (typeof rawMetric === 'string' && rawMetric.trim() !== '') {
+          result.label = rawMetric.trim();
+        } else if (typeof rawMetric === 'number' && Number.isFinite(rawMetric)) {
+          result.percentage = rawMetric;
+        }
+
+        const labelKey = `${key}Label`;
+        if (result.label === null && typeof entry[labelKey] === 'string' && entry[labelKey].trim() !== '') {
+          result.label = entry[labelKey].trim();
+        }
+
+        const percentageKey = `${key}Percentage`;
+        const rawPercentage = entry[percentageKey];
+        if (result.percentage === null && typeof rawPercentage === 'number' && Number.isFinite(rawPercentage)) {
+          result.percentage = rawPercentage;
+        } else if (result.percentage === null && typeof rawPercentage === 'string' && rawPercentage.trim() !== '') {
+          const parsed = Number.parseFloat(rawPercentage.replace(',', '.'));
+          if (Number.isFinite(parsed)) {
+            result.percentage = parsed;
+          }
+        }
+
+        if (result.percentage === null && result.label !== null) {
+          const parsedFromLabel = parsePercentageValue(result.label);
+          if (Number.isFinite(parsedFromLabel)) {
+            result.percentage = parsedFromLabel;
+          }
+        }
+
+        if (result.label === null && result.percentage !== null) {
+          const formatted = formatPercentageValue(result.percentage);
+          result.label = formatted && formatted.trim() !== '' ? formatted : null;
+        }
+
+        return result;
+      };
+
+      const normalizeSystemLoadMetric = (entry) => {
+        const result = {
+          one: null,
+          five: null,
+          fifteen: null,
+          label: null,
+        };
+
+        if (!entry || typeof entry !== 'object') {
+          return result;
+        }
+
+        const rawMetric = entry.systemLoad;
+
+        if (rawMetric && typeof rawMetric === 'object' && !Array.isArray(rawMetric)) {
+          if (typeof rawMetric.label === 'string' && rawMetric.label.trim() !== '') {
+            result.label = rawMetric.label.trim();
+          }
+          if (typeof rawMetric.one === 'number' && Number.isFinite(rawMetric.one)) {
+            result.one = rawMetric.one;
+          }
+          if (typeof rawMetric.five === 'number' && Number.isFinite(rawMetric.five)) {
+            result.five = rawMetric.five;
+          }
+          if (typeof rawMetric.fifteen === 'number' && Number.isFinite(rawMetric.fifteen)) {
+            result.fifteen = rawMetric.fifteen;
+          }
+        } else if (typeof rawMetric === 'string' && rawMetric.trim() !== '') {
+          result.label = rawMetric.trim();
+        }
+
+        if (result.label === null && typeof entry.systemLoadLabel === 'string' && entry.systemLoadLabel.trim() !== '') {
+          result.label = entry.systemLoadLabel.trim();
+        }
+
+        if (
+          (result.one === null || result.five === null || result.fifteen === null)
+          && entry.systemLoadValues
+          && typeof entry.systemLoadValues === 'object'
+          && entry.systemLoadValues !== null
+        ) {
+          const values = entry.systemLoadValues;
+          if (result.one === null && typeof values.one === 'number' && Number.isFinite(values.one)) {
+            result.one = values.one;
+          }
+          if (result.five === null && typeof values.five === 'number' && Number.isFinite(values.five)) {
+            result.five = values.five;
+          }
+          if (result.fifteen === null && typeof values.fifteen === 'number' && Number.isFinite(values.fifteen)) {
+            result.fifteen = values.fifteen;
+          }
+        }
+
+        if (result.label !== null) {
+          const parsed = parseSystemLoadValues(result.label);
+          if (result.one === null && parsed.one !== null) {
+            result.one = parsed.one;
+          }
+          if (result.five === null && parsed.five !== null) {
+            result.five = parsed.five;
+          }
+          if (result.fifteen === null && parsed.fifteen !== null) {
+            result.fifteen = parsed.fifteen;
+          }
+        }
+
+        if (result.label === null) {
+          const parts = [];
+          if (typeof result.one === 'number' && Number.isFinite(result.one)) {
+            parts.push(`1 min: ${formatLoadAverageValue(result.one)}`);
+          }
+          if (typeof result.five === 'number' && Number.isFinite(result.five)) {
+            parts.push(`5 min: ${formatLoadAverageValue(result.five)}`);
+          }
+          if (typeof result.fifteen === 'number' && Number.isFinite(result.fifteen)) {
+            parts.push(`15 min: ${formatLoadAverageValue(result.fifteen)}`);
+          }
+          if (parts.length > 0) {
+            result.label = parts.join(' • ');
+          }
+        }
+
+        return result;
       };
 
       const createHistoryEntry = (raw) => {
@@ -1420,19 +1911,35 @@ $serviceStatuses = $snapshot['services'];
           }
         }
 
-        if (value === null) {
-          return null;
+        if (value !== null && (!label || label.trim() === '')) {
+          label = `${value.toFixed(1)} °C`;
         }
 
-        if (!label || label.trim() === '') {
-          label = `${value.toFixed(1)} °C`;
+        const memoryUsage = normalizePercentageMetric(raw, 'memoryUsage');
+        const diskUsage = normalizePercentageMetric(raw, 'diskUsage');
+        const systemLoad = normalizeSystemLoadMetric(raw);
+
+        const hasNumericValue = [
+          value,
+          memoryUsage.percentage,
+          diskUsage.percentage,
+          systemLoad.one,
+          systemLoad.five,
+          systemLoad.fifteen,
+        ].some((metricValue) => typeof metricValue === 'number' && Number.isFinite(metricValue));
+
+        if (!hasNumericValue) {
+          return null;
         }
 
         return {
           generatedAt,
           time: timeLabel,
           cpuTemperatureValue: value,
-          cpuTemperatureLabel: label,
+          cpuTemperatureLabel: label && label.trim() !== '' ? label : null,
+          memoryUsage,
+          diskUsage,
+          systemLoad,
         };
       };
 
@@ -1447,11 +1954,17 @@ $serviceStatuses = $snapshot['services'];
           }
         };
 
+        const metricDefinition = getHistoryMetricDefinition(historyState.metric);
+        const { label: metricLabel } = setHistoryMetricState(metricDefinition);
+        const historyLabel = typeof metricLabel === 'string' && metricLabel.trim() !== ''
+          ? metricLabel.trim()
+          : 'Metryka';
+
         if (historyState.enabled === null) {
           destroyHistoryChart();
           hideChart();
 
-          setHistoryMessage('Historia ładuje się...');
+          setHistoryMessage(`Historia metryki „${historyLabel}” ładuje się...`);
           return;
         }
 
@@ -1459,32 +1972,44 @@ $serviceStatuses = $snapshot['services'];
           destroyHistoryChart();
           hideChart();
 
-          setHistoryMessage('Historia jest wyłączona. Skonfiguruj zmienne środowiskowe, aby ją włączyć.');
+          setHistoryMessage(`Historia metryki „${historyLabel}” jest wyłączona. Skonfiguruj zmienne środowiskowe, aby ją włączyć.`);
           return;
         }
 
-        const validEntries = historyState.entries.filter(
-          (entry) => entry && typeof entry.cpuTemperatureValue === 'number' && Number.isFinite(entry.cpuTemperatureValue),
-        );
+        const validEntries = historyState.entries.filter((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return false;
+          }
+          const value = metricDefinition.getValue(entry);
+          return typeof value === 'number' && Number.isFinite(value);
+        });
 
         if (validEntries.length === 0) {
           destroyHistoryChart();
           hideChart();
 
-          setHistoryMessage('Historia nie zawiera jeszcze danych.');
+          setHistoryMessage(`Brak danych dla metryki „${historyLabel}”.`);
           return;
         }
 
-        const signature = JSON.stringify(
-          validEntries.map((entry) => [
-            entry.generatedAt ?? entry.time ?? '',
-            entry.cpuTemperatureValue,
-            entry.cpuTemperatureLabel ?? '',
-          ]),
-        );
+        const signature = JSON.stringify({
+          metric: metricDefinition.id,
+          entries: validEntries.map((entry) => {
+            const value = metricDefinition.getValue(entry);
+            const tooltipLabel = metricDefinition.getTooltipLabel(entry, value);
+            const tooltip = typeof tooltipLabel === 'string'
+              ? tooltipLabel.trim().slice(0, 160)
+              : '';
+            return [
+              entry.generatedAt ?? entry.time ?? '',
+              value,
+              tooltip,
+            ];
+          }),
+        });
 
         if (historyState.chartSignature !== signature) {
-          const success = renderHistoryChart(validEntries);
+          const success = renderHistoryChart(validEntries, metricDefinition.id);
           if (!success) {
             destroyHistoryChart();
             hideChart();
@@ -1879,6 +2404,7 @@ $serviceStatuses = $snapshot['services'];
         });
       }
 
+      initializeHistoryMetricSwitch();
       updateHistoryChart();
 
       if (supportsFetch) {
