@@ -35,6 +35,29 @@ odpowie statusem HTTP `401` oraz nagłówkiem `WWW-Authenticate`, co poinformuje
 przeglądarkę o konieczności podania loginu i hasła. Weryfikacja poświadczeń odbywa się
 przy użyciu funkcji `hash_equals`, dzięki czemu porównanie ma stały czas wykonania.
 
+## Częstotliwość strumienia statusu (SSE)
+
+Panel udostępnia endpoint `?status=stream`, który wysyła aktualne dane w formacie
+Server-Sent Events. Domyślnie nowe zdarzenia trafiają do przeglądarki co sekundę,
+ale interwał możesz kontrolować zmienną środowiskową:
+
+- `APP_STREAM_INTERVAL` – liczba sekund pomiędzy kolejnymi zdarzeniami SSE.
+
+Wartość musi być liczbą całkowitą i mieścić się w przedziale od 1 do 60. Aplikacja
+automatycznie obcina wartości spoza zakresu (np. `0` zostanie potraktowane jak `1`, a
+`120` jak `60`). Przykładowa konfiguracja:
+
+```bash
+export APP_STREAM_INTERVAL=5
+```
+
+Po zmianie ustawień zrestartuj proces PHP, aby nowe wartości zostały odczytane. Mniejsza
+częstotliwość (czyli większy interwał, np. 5–10 sekund) sprawdzi się, gdy Raspberry Pi ma
+ograniczone zasoby CPU, monitorujesz wolniejsze usługi zewnętrzne lub chcesz zmniejszyć
+generowany ruch sieciowy. Interwał jest przekazywany również do front-endu, dzięki czemu
+panel może dopasować swoje komunikaty oraz zapasowe odświeżanie do realnego tempa
+strumienia.
+
 ## Sterowanie Shelly
 
 Panel zawiera dodatkową zakładkę pozwalającą monitorować i przełączać przekaźniki Shelly
