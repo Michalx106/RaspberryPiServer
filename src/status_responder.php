@@ -47,6 +47,44 @@ function respondWithStatusJson(array $servicesToCheck): void
 }
 
 /**
+ * Zwraca interwał strumieniowania SSE w sekundach.
+ */
+function getStatusStreamInterval(): int
+{
+    static $cachedInterval = null;
+
+    if ($cachedInterval !== null) {
+        return $cachedInterval;
+    }
+
+    $defaultInterval = 1;
+    $minInterval = 1;
+    $maxInterval = 60;
+
+    $cachedInterval = $defaultInterval;
+
+    $intervalEnv = getenv('APP_STREAM_INTERVAL');
+
+    if (is_string($intervalEnv)) {
+        $normalized = trim($intervalEnv);
+
+        if ($normalized !== '' && is_numeric($normalized)) {
+            $intervalValue = (int) $normalized;
+
+            if ($intervalValue < $minInterval) {
+                $cachedInterval = $minInterval;
+            } elseif ($intervalValue > $maxInterval) {
+                $cachedInterval = $maxInterval;
+            } else {
+                $cachedInterval = $intervalValue;
+            }
+        }
+    }
+
+    return $cachedInterval;
+}
+
+/**
  * Strumieniuje stan w formacie Server-Sent Events.
  *
  * @param array<string, string> $servicesToCheck
@@ -77,7 +115,7 @@ function streamStatus(array $servicesToCheck): void
     @ob_flush();
     @flush();
 
-    $streamInterval = 1;
+    $streamInterval = getStatusStreamInterval();
 
     while (true) {
         if (function_exists('connection_aborted') && connection_aborted()) {

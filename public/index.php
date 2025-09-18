@@ -115,6 +115,8 @@ $uptime = $snapshot['uptime'];
 $memoryUsage = $snapshot['memoryUsage'];
 $diskUsage = $snapshot['diskUsage'];
 $serviceStatuses = $snapshot['services'];
+
+$streamInterval = getStatusStreamInterval();
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -123,7 +125,7 @@ $serviceStatuses = $snapshot['services'];
   <title>Moja strona na Raspberry Pi</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-csrf-token="<?= h($csrfToken); ?>">
+<body data-csrf-token="<?= h($csrfToken); ?>" data-stream-interval="<?= h((string) $streamInterval); ?>">
   <div class="page-header">
     <h1>Witaj na mojej stronie! 🎉</h1>
     <div class="theme-toggle theme-toggle--top">
@@ -197,7 +199,7 @@ $serviceStatuses = $snapshot['services'];
       <?php endforeach; ?>
     </ul>
 
-    <p class="status-note">
+    <p class="status-note" data-role="status-note">
       Dane odświeżają się automatycznie. W przypadku problemów spróbuj kliknąć przycisk poniżej.
     </p>
 
@@ -230,7 +232,39 @@ $serviceStatuses = $snapshot['services'];
       const STATUS_JSON_ENDPOINT = '?status=json';
       const STATUS_STREAM_ENDPOINT = '?status=stream';
       const STATUS_HISTORY_ENDPOINT = '?status=history';
-      const REFRESH_INTERVAL = 15000;
+
+      const readStreamInterval = () => {
+        if (!document.body || !document.body.dataset) {
+          return null;
+        }
+
+        const raw = document.body.dataset.streamInterval;
+        if (typeof raw !== 'string' || raw.trim() === '') {
+          return null;
+        }
+
+        const parsed = Number.parseInt(raw, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          return null;
+        }
+
+        return parsed;
+      };
+
+      const STREAM_INTERVAL_SECONDS = readStreamInterval();
+
+      const REFRESH_INTERVAL = (() => {
+        const fallback = 15000;
+
+        if (typeof STREAM_INTERVAL_SECONDS === 'number'
+          && Number.isFinite(STREAM_INTERVAL_SECONDS)
+          && STREAM_INTERVAL_SECONDS > 0
+        ) {
+          return Math.max(STREAM_INTERVAL_SECONDS * 1000, fallback);
+        }
+
+        return fallback;
+      })();
       const STREAM_RECONNECT_DELAY = 5000;
       const HISTORY_DEFAULT_LIMIT = 360;
       const HISTORY_DEFAULT_METRIC = 'cpuTemperature';
@@ -255,6 +289,7 @@ $serviceStatuses = $snapshot['services'];
         refreshLabel: document.querySelector('[data-role="refresh-label"]'),
         refreshButton: document.querySelector('[data-role="refresh-button"]'),
         refreshContainer: document.querySelector('[data-role="refresh-container"]'),
+        statusNote: document.querySelector('[data-role="status-note"]'),
         historyContainer: document.querySelector('[data-role="history-container"]'),
         historyChartWrapper: document.querySelector('[data-role="history-chart-wrapper"]'),
         historyChart: document.querySelector('[data-role="history-chart"]'),
@@ -2112,7 +2147,15 @@ $serviceStatuses = $snapshot['services'];
           : new Date().toLocaleTimeString();
 
         const modeLabel = mode === 'stream' ? 'tryb na żywo' : (mode === 'poll' ? 'tryb zapasowy' : 'odświeżenie');
-        elements.refreshLabel.textContent = `Ostatnia aktualizacja (${modeLabel}): ${timestamp}${serverTime ? ` (czas serwera: ${serverTime})` : ''}`;
+        const serverLabel = serverTime ? ` (czas serwera: ${serverTime})` : '';
+        const intervalLabel = mode === 'stream'
+          && typeof STREAM_INTERVAL_SECONDS === 'number'
+          && Number.isFinite(STREAM_INTERVAL_SECONDS)
+          && STREAM_INTERVAL_SECONDS > 0
+            ? ` (interwał strumienia: ${STREAM_INTERVAL_SECONDS} s)`
+            : '';
+
+        elements.refreshLabel.textContent = `Ostatnia aktualizacja (${modeLabel}): ${timestamp}${serverLabel}${intervalLabel}`;
       };
 
       const renderServices = (services) => {
@@ -2391,6 +2434,14 @@ $serviceStatuses = $snapshot['services'];
       }
 
       initializeTheme();
+
+      if (elements.statusNote
+        && typeof STREAM_INTERVAL_SECONDS === 'number'
+        && Number.isFinite(STREAM_INTERVAL_SECONDS)
+        && STREAM_INTERVAL_SECONDS > 0
+      ) {
+        elements.statusNote.textContent = `Dane odświeżają się automatycznie (interwał: ${STREAM_INTERVAL_SECONDS} s). W przypadku problemów spróbuj kliknąć przycisk poniżej.`;
+      }
 
       if (elements.refreshButton) {
         elements.refreshButton.addEventListener('click', () => {
