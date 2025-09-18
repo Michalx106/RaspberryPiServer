@@ -96,7 +96,8 @@ w konfiguracji Shelly nie wpływają na działanie całego panelu.
 ## Historia metryk
 
 Panel może zapisywać kolejne snapshoty stanu do pliku JSON i prezentować historię
-na prostym wykresie temperatury CPU.
+na wykresach pokazujących m.in. temperaturę CPU, użycie pamięci RAM, zajętość dysku
+oraz obciążenie systemu.
 
 ### Konfiguracja zapisu
 
@@ -135,9 +136,12 @@ zwracanych elementów parametrem `limit`, np. `?status=history&limit=120`.
 
 ### Wykres w interfejsie
 
-Front-end rysuje wykres temperatury CPU z wykorzystaniem elementu SVG generowanego przez
-JavaScript. Wykorzystuje wyłącznie natywne możliwości przeglądarki, więc aplikacja nie ładuje
-żadnych bibliotek zewnętrznych (np. Chart.js) ani zasobów z CDN.
+Front-end rysuje wykresy metryk (domyślnie temperatury CPU) z wykorzystaniem elementu SVG
+generowanego przez JavaScript. Wykorzystuje wyłącznie natywne możliwości przeglądarki, więc
+aplikacja nie ładuje żadnych bibliotek zewnętrznych (np. Chart.js) ani zasobów z CDN.
+Pod wykresem znajdziesz przełącznik, który pozwala wybrać jedną z dostępnych metryk (temperatura,
+pamięć, dysk, obciążenie). Wybrana opcja jest zapisywana w `localStorage`, dlatego po odświeżeniu
+strony panel od razu pokazuje preferowany wskaźnik.
 Wykres aktualizuje się automatycznie po wczytaniu strony, ręcznym odświeżeniu oraz podczas pracy
 w trybie strumieniowym. Jeżeli historia jest wyłączona lub niedostępna, panel wyświetli
 odpowiedni komunikat. Wygląd i zachowanie wykresu możesz dopasować, modyfikując pliki
