@@ -58,6 +58,29 @@ generowany ruch sieciowy. Interwał jest przekazywany również do front-endu, d
 panel może dopasować swoje komunikaty oraz zapasowe odświeżanie do realnego tempa
 strumienia.
 
+## Wybór monitorowanej partycji
+
+Domyślnie panel prezentuje zajętość głównej partycji systemowej (`/`). Jeżeli chcesz śledzić
+inny punkt montowania (np. dysk z danymi lub udział sieciowy), ustaw zmienną
+środowiskową:
+
+- `APP_DISK_USAGE_PATH` – absolutna ścieżka, dla której mają być liczone statystyki.
+
+Ścieżka musi istnieć w systemie oraz zaczynać się od `/`. W przypadku pustej lub
+niepoprawnej wartości aplikacja wróci do domyślnego katalogu głównego. Przykład
+konfiguracji dwóch instancji monitorujących różne partycje:
+
+```bash
+# instancja panelu monitorująca systemowe „root”
+export APP_DISK_USAGE_PATH="/"
+
+# drugi panel skierowany na wolumen z multimediami
+export APP_DISK_USAGE_PATH="/mnt/media"
+```
+
+Po zmianie zmiennej uruchom ponownie serwer WWW / PHP-FPM, aby nowa konfiguracja została
+uwzględniona.
+
 ## Sterowanie Shelly
 
 Panel zawiera dodatkową zakładkę pozwalającą monitorować i przełączać przekaźniki Shelly
