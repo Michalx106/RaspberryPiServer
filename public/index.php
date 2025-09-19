@@ -76,16 +76,13 @@ if (handleStatusRequest($statusParam, $servicesToCheck)) {
     return;
 }
 
-$csrfToken = null;
-
 try {
-    $csrfToken = bin2hex(random_bytes(32));
+    $csrfToken = generateSecureToken(32, '[CSRF]');
 } catch (Throwable $exception) {
-    error_log(sprintf('[CSRF] Nie udało się wygenerować bezpiecznego tokenu: %s: %s', get_class($exception), $exception->getMessage()));
-}
-
-if ($csrfToken === null || $csrfToken === '') {
-    $csrfToken = hash('sha256', uniqid((string) mt_rand(), true));
+    header('Content-Type: text/plain; charset=utf-8');
+    http_response_code(500);
+    echo 'Internal Server Error';
+    return;
 }
 
 $isHttps = (
