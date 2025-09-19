@@ -154,12 +154,74 @@ function getMemoryUsage(): ?string
 }
 
 /**
+ * Zwraca ścieżkę używaną do monitorowania zajętości dysku.
+ */
+function resolveDiskUsagePath(): string
+{
+    static $resolvedPath;
+
+    if ($resolvedPath !== null) {
+        return $resolvedPath;
+    }
+
+    $defaultPath = '/';
+    $configured = getenv('APP_DISK_USAGE_PATH');
+
+    if ($configured === false) {
+        $resolvedPath = $defaultPath;
+
+        return $resolvedPath;
+    }
+
+    $path = trim((string) $configured);
+
+    if ($path === '' || strpos($path, "\0") !== false) {
+        $resolvedPath = $defaultPath;
+
+        return $resolvedPath;
+    }
+
+    if ($path[0] !== '/') {
+        $resolvedPath = $defaultPath;
+
+        return $resolvedPath;
+    }
+
+    $realPath = @realpath($path);
+    if ($realPath !== false) {
+        $path = $realPath;
+    }
+
+    if ($path !== '/' && @file_exists($path) === false) {
+        $resolvedPath = $defaultPath;
+
+        return $resolvedPath;
+    }
+
+    $resolvedPath = $path;
+
+    return $resolvedPath;
+}
+
+/**
  * Odczytuje użycie miejsca na dysku.
  */
-function getDiskUsage(string $path = '/'): ?string
+function getDiskUsage(?string $path = null): ?string
 {
-    $total = @disk_total_space($path);
-    $free = @disk_free_space($path);
+    $pathToCheck = $path;
+
+    if ($pathToCheck === null) {
+        $pathToCheck = resolveDiskUsagePath();
+    } else {
+        $pathToCheck = trim($pathToCheck);
+
+        if ($pathToCheck === '' || strpos($pathToCheck, "\0") !== false) {
+            $pathToCheck = resolveDiskUsagePath();
+        }
+    }
+
+    $total = @disk_total_space($pathToCheck);
+    $free = @disk_free_space($pathToCheck);
 
     if ($total === false || $free === false || $total <= 0) {
         return null;

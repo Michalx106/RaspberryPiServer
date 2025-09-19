@@ -19,6 +19,7 @@ declare(strict_types=1);
 function collectStatusSnapshot(array $servicesToCheck): array
 {
     $now = new DateTimeImmutable('now');
+    $diskUsagePath = resolveDiskUsagePath();
 
     $snapshot = [
         'time' => $now->format('H:i:s'),
@@ -27,7 +28,7 @@ function collectStatusSnapshot(array $servicesToCheck): array
         'systemLoad' => getSystemLoad(),
         'uptime' => getUptime(),
         'memoryUsage' => getMemoryUsage(),
-        'diskUsage' => getDiskUsage(),
+        'diskUsage' => getDiskUsage($diskUsagePath),
         'services' => collectServiceStatuses($servicesToCheck),
     ];
 
