@@ -34,6 +34,172 @@ function fetchShellyStatus(array $device): array
 }
 
 /**
+ * @param array<string, array{id: string, label?: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $devices
+ * @return array<string, array{ok: bool, state: string, description: string, error: string|null, data: mixed, device: array{id: string|null, label: string}}>
+ */
+function fetchShellyStatusesBatch(array $devices): array
+{
+    if (count($devices) <= 1 || !function_exists('curl_multi_init')) {
+        $results = [];
+        foreach ($devices as $deviceId => $device) {
+            $results[$deviceId] = fetchShellyStatus($device);
+        }
+
+        return $results;
+    }
+
+    $multiHandle = curl_multi_init();
+    if ($multiHandle === false) {
+        $results = [];
+        foreach ($devices as $deviceId => $device) {
+            $results[$deviceId] = fetchShellyStatus($device);
+        }
+
+        return $results;
+    }
+
+    $handles = [];
+    $results = [];
+
+    foreach ($devices as $deviceId => $device) {
+        $relayId = isset($device['relayId']) ? (int) $device['relayId'] : 0;
+        $prepared = createShellyRpcCurlHandle($device, 'Switch.GetStatus', ['id' => $relayId], 'status');
+
+        if (!$prepared['ok'] || !isset($prepared['handle'])) {
+            $errorCode = $prepared['error'] ?? 'status:unknown_error';
+            $description = 'Nie udało się pobrać stanu urządzenia.';
+            if ($errorCode !== null) {
+                $description .= ' (' . $errorCode . ')';
+            }
+
+            $results[$deviceId] = buildShellyResponse($device, 'unknown', $description, $errorCode, null);
+            continue;
+        }
+
+        /** @var CurlHandle|resource $handle */
+        $handle = $prepared['handle'];
+        curl_setopt($handle, CURLOPT_PRIVATE, (string) $deviceId);
+        $addResult = curl_multi_add_handle($multiHandle, $handle);
+
+        if ($addResult !== CURLM_OK) {
+            curl_close($handle);
+            $errorCode = sprintf('status:curl_multi_add:%d', $addResult);
+            $description = 'Nie udało się pobrać stanu urządzenia. (' . $errorCode . ')';
+            $results[$deviceId] = buildShellyResponse($device, 'unknown', $description, $errorCode, null);
+            continue;
+        }
+
+        $handles[$deviceId] = $handle;
+    }
+
+    $running = null;
+    do {
+        $status = curl_multi_exec($multiHandle, $running);
+    } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+    while ($running && $status === CURLM_OK) {
+        $selectResult = curl_multi_select($multiHandle, 1.0);
+        if ($selectResult === -1) {
+            usleep(10000);
+        }
+
+        do {
+            $status = curl_multi_exec($multiHandle, $running);
+        } while ($status === CURLM_CALL_MULTI_PERFORM);
+    }
+
+    if ($status !== CURLM_OK && $status !== CURLM_CALL_MULTI_PERFORM) {
+        foreach ($handles as $handle) {
+            curl_multi_remove_handle($multiHandle, $handle);
+            curl_close($handle);
+        }
+        curl_multi_close($multiHandle);
+
+        $fallback = [];
+        foreach ($devices as $deviceId => $device) {
+            $fallback[$deviceId] = fetchShellyStatus($device);
+        }
+
+        return $fallback;
+    }
+
+    while ($info = curl_multi_info_read($multiHandle)) {
+        $handle = $info['handle'];
+        $deviceId = (string) curl_getinfo($handle, CURLINFO_PRIVATE);
+        $device = $devices[$deviceId] ?? ['id' => $deviceId];
+
+        if ($info['result'] !== CURLE_OK) {
+            $errorMessage = curl_error($handle);
+            if ($errorMessage === '' && function_exists('curl_strerror')) {
+                $errorMessage = curl_strerror($info['result']);
+            }
+            if ($errorMessage === '' || $errorMessage === null) {
+                $errorMessage = 'Nieznany błąd cURL';
+            }
+            $errorCode = sprintf('status:curl_error:%d', $info['result']);
+            $description = 'Nie udało się pobrać stanu urządzenia. (' . $errorMessage . ')';
+            $results[$deviceId] = buildShellyResponse($device, 'unknown', $description, $errorCode, null);
+        } else {
+            $response = curl_multi_getcontent($handle);
+            if (!is_string($response)) {
+                $response = '';
+            }
+
+            $rpcResult = finalizeShellyRpcResponse($handle, 'status', $response);
+
+            if (!$rpcResult['ok']) {
+                $description = 'Nie udało się pobrać stanu urządzenia.';
+                if ($rpcResult['error'] !== null) {
+                    $description .= ' (' . $rpcResult['error'] . ')';
+                }
+
+                $results[$deviceId] = buildShellyResponse(
+                    $device,
+                    'unknown',
+                    $description,
+                    $rpcResult['error'],
+                    $rpcResult['data']
+                );
+            } else {
+                $decoded = is_array($rpcResult['data']) ? $rpcResult['data'] : [];
+                $isOn = extractShellyOutputState($decoded);
+
+                if ($isOn === true) {
+                    $results[$deviceId] = buildShellyResponse($device, 'on', 'Urządzenie jest włączone.', null, $decoded);
+                } elseif ($isOn === false) {
+                    $results[$deviceId] = buildShellyResponse($device, 'off', 'Urządzenie jest wyłączone.', null, $decoded);
+                } else {
+                    $results[$deviceId] = buildShellyResponse($device, 'unknown', 'Nie udało się ustalić stanu przekaźnika.', null, $decoded);
+                }
+            }
+        }
+
+        curl_multi_remove_handle($multiHandle, $handle);
+        curl_close($handle);
+        unset($handles[$deviceId]);
+    }
+
+    foreach ($handles as $deviceId => $handle) {
+        curl_multi_remove_handle($multiHandle, $handle);
+        curl_close($handle);
+
+        if (!isset($results[$deviceId]) && isset($devices[$deviceId])) {
+            $results[$deviceId] = fetchShellyStatus($devices[$deviceId]);
+        }
+    }
+
+    curl_multi_close($multiHandle);
+
+    foreach ($devices as $deviceId => $device) {
+        if (!isset($results[$deviceId])) {
+            $results[$deviceId] = fetchShellyStatus($device);
+        }
+    }
+
+    return $results;
+}
+
+/**
  * @param array{id?: string, label?: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string} $device
  * @return array{ok: bool, state: string, description: string, error: string|null, data: mixed}
  */
@@ -93,19 +259,57 @@ function setShellyRelayState(array $device, string $action): array
  */
 function performShellyRpcRequest(array $device, string $method, array $payload, string $context): array
 {
+    $prepared = createShellyRpcCurlHandle($device, $method, $payload, $context);
+
+    if (!$prepared['ok'] || !isset($prepared['handle'])) {
+        return [
+            'ok' => false,
+            'error' => $prepared['error'],
+            'data' => null,
+        ];
+    }
+
+    /** @var CurlHandle|resource $curl */
+    $curl = $prepared['handle'];
+    $response = curl_exec($curl);
+
+    if ($response === false) {
+        $errorCode = curl_errno($curl);
+        $errorMessage = curl_error($curl) ?: 'Nieznany błąd cURL';
+        curl_close($curl);
+
+        return [
+            'ok' => false,
+            'error' => sprintf('%s:curl_error:%d:%s', $context, $errorCode, $errorMessage),
+            'data' => null,
+        ];
+    }
+
+    $result = finalizeShellyRpcResponse($curl, $context, (string) $response);
+    curl_close($curl);
+
+    return $result;
+}
+
+/**
+ * @param array{id?: string, label?: string, host?: string, relayId?: int, authKey?: string, username?: string, password?: string} $device
+ * @return array{ok: bool, handle: CurlHandle|resource|null, error: string|null}
+ */
+function createShellyRpcCurlHandle(array $device, string $method, array $payload, string $context): array
+{
     if (!function_exists('curl_init')) {
         return [
             'ok' => false,
+            'handle' => null,
             'error' => 'environment:missing_curl',
-            'data' => null,
         ];
     }
 
     if (!isset($device['host'])) {
         return [
             'ok' => false,
+            'handle' => null,
             'error' => $context . ':missing_host',
-            'data' => null,
         ];
     }
 
@@ -114,8 +318,8 @@ function performShellyRpcRequest(array $device, string $method, array $payload, 
     if (!filter_var($host, FILTER_VALIDATE_URL)) {
         return [
             'ok' => false,
+            'handle' => null,
             'error' => $context . ':invalid_host',
-            'data' => null,
         ];
     }
 
@@ -125,8 +329,8 @@ function performShellyRpcRequest(array $device, string $method, array $payload, 
     if ($body === false) {
         return [
             'ok' => false,
+            'handle' => null,
             'error' => $context . ':json_encode_error',
-            'data' => null,
         ];
     }
 
@@ -134,8 +338,8 @@ function performShellyRpcRequest(array $device, string $method, array $payload, 
     if ($curl === false) {
         return [
             'ok' => false,
+            'handle' => null,
             'error' => $context . ':curl_init_error',
-            'data' => null,
         ];
     }
 
@@ -163,23 +367,22 @@ function performShellyRpcRequest(array $device, string $method, array $payload, 
         curl_setopt($curl, CURLOPT_USERPWD, $device['username'] . ':' . $device['password']);
     }
 
-    $response = curl_exec($curl);
+    return [
+        'ok' => true,
+        'handle' => $curl,
+        'error' => null,
+    ];
+}
 
-    if ($response === false) {
-        $errorCode = curl_errno($curl);
-        $errorMessage = curl_error($curl) ?: 'Nieznany błąd cURL';
-        curl_close($curl);
-
-        return [
-            'ok' => false,
-            'error' => sprintf('%s:curl_error:%d:%s', $context, $errorCode, $errorMessage),
-            'data' => null,
-        ];
-    }
-
+/**
+ * @param CurlHandle|resource $curl
+ * @param string $response
+ * @return array{ok: bool, error: string|null, data: mixed}
+ */
+function finalizeShellyRpcResponse($curl, string $context, string $response): array
+{
     $httpInfoOption = defined('CURLINFO_RESPONSE_CODE') ? CURLINFO_RESPONSE_CODE : CURLINFO_HTTP_CODE;
     $httpCode = curl_getinfo($curl, $httpInfoOption);
-    curl_close($curl);
 
     if (!is_int($httpCode)) {
         $httpCode = 0;

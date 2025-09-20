@@ -65,6 +65,8 @@ function respondWithShellyList(array $devices): void
     $items = [];
     $hasErrors = false;
 
+    $normalizedDevices = [];
+
     foreach ($devices as $deviceId => $config) {
         if (!is_array($config)) {
             continue;
@@ -72,11 +74,23 @@ function respondWithShellyList(array $devices): void
 
         $deviceConfig = $config;
         $deviceConfig['id'] = (string) $deviceId;
+        $normalizedDevices[(string) $deviceId] = $deviceConfig;
+    }
 
-        $status = fetchShellyStatus($deviceConfig);
+    $statuses = fetchShellyStatusesBatch($normalizedDevices);
+
+    foreach ($normalizedDevices as $deviceId => $deviceConfig) {
+        $status = $statuses[$deviceId] ?? buildShellyResponse(
+            $deviceConfig,
+            'unknown',
+            'Nie udało się pobrać stanu urządzenia.',
+            'status:missing_result',
+            null
+        );
+
         $items[] = [
-            'id' => (string) $deviceId,
-            'label' => $deviceConfig['label'] ?? (string) $deviceId,
+            'id' => $deviceId,
+            'label' => $deviceConfig['label'] ?? $deviceId,
             'state' => $status['state'],
             'description' => $status['description'],
             'error' => $status['error'],
