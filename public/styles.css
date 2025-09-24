@@ -250,8 +250,8 @@ footer {
   border-radius: 12px;
   padding: 16px;
   box-shadow: inset 0 0 0 1px var(--panel-border);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(180px, 45%, 360px);
+  display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 16px;
   transition: box-shadow 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
@@ -281,6 +281,7 @@ footer {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 260px;
 }
 
 .shelly-device__state {
@@ -312,7 +313,10 @@ footer {
   justify-content: flex-end;
   margin: 0;
   align-self: stretch;
-  min-width: 0;
+  min-width: 220px;
+  flex: 1 1 320px;
+  margin-left: auto;
+
 }
 
 
@@ -323,7 +327,8 @@ footer {
   justify-content: center;
   width: 100%;
   height: 100%;
-  min-height: 140px;
+  min-height: 160px;
+
   padding: 0;
   border: none;
   border-radius: 16px;
@@ -426,7 +431,26 @@ footer {
   color: var(--status-error);
   font-size: 14px;
   font-weight: 600;
-  grid-column: 1 / -1;
+  flex-basis: 100%;
+}
+
+
+@media (max-width: 700px) {
+  .shelly-device {
+    flex-direction: column;
+  }
+
+  .shelly-device__actions {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    min-width: 0;
+  }
+
+  .shelly-device__action {
+    min-height: 140px;
+  }
 }
 
 
