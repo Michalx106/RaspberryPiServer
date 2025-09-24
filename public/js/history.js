@@ -515,11 +515,18 @@ const renderHistoryChart = (elements, entries, metricId) => {
     return false;
   }
 
-  const values = entries.map((entry) => metric.getValue(entry));
-  if (values.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+  const normalizedEntries = entries
+    .map((entry) => ({
+      entry,
+      value: metric.getValue(entry),
+    }))
+    .filter((item) => typeof item.value === 'number' && Number.isFinite(item.value));
+
+  if (normalizedEntries.length === 0) {
     return false;
   }
 
+  const values = normalizedEntries.map((item) => item.value);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
 
@@ -628,9 +635,9 @@ const renderHistoryChart = (elements, entries, metricId) => {
 
   svg.appendChild(axisGroup);
 
-  const points = entries.map((entry, index) => {
-    const value = metric.getValue(entry);
-    const ratioX = index / Math.max(1, entries.length - 1);
+  const points = normalizedEntries.map((item, index) => {
+    const { entry, value } = item;
+    const ratioX = index / Math.max(1, normalizedEntries.length - 1);
     const ratioY = (value - chartMin) / range;
     const x = baseXStart + (ratioX * innerWidth);
     const y = baseY - (ratioY * innerHeight);
