@@ -267,6 +267,7 @@ $streamInterval = getStatusStreamInterval();
       const HISTORY_DEFAULT_METRIC = 'cpuTemperature';
       const SHELLY_LIST_ENDPOINT = '?shelly=list';
       const SHELLY_COMMAND_ENDPOINT = '?shelly=command';
+      const SHELLY_AUTO_REFRESH_INTERVAL = 15000;
       const STATUS_TAB_ID = 'status';
       const SHELLY_TAB_ID = 'shelly';
       const TAB_STORAGE_KEY = 'dashboard-active-tab';
@@ -503,6 +504,8 @@ $streamInterval = getStatusStreamInterval();
         shellyState.error = SHELLY_CONFIG_ERROR_MESSAGE;
         shellyState.initialized = true;
       }
+
+      let shellyRefreshTimer = null;
 
       const setShellyError = (message) => {
         if (!elements.shellyError) {
@@ -896,14 +899,41 @@ $streamInterval = getStatusStreamInterval();
           return;
         }
 
-        if (force) {
-          loadShellyDevices(true);
+        loadShellyDevices(Boolean(force));
+      };
+
+      const stopShellyAutoRefresh = () => {
+        if (shellyRefreshTimer !== null) {
+          window.clearInterval(shellyRefreshTimer);
+          shellyRefreshTimer = null;
+        }
+      };
+
+      const startShellyAutoRefresh = () => {
+        if (shellyRefreshTimer !== null) {
           return;
         }
 
-        if (!shellyState.initialized && !shellyState.loading) {
-          loadShellyDevices(false);
+        if (shellyConfigError || !supportsFetch) {
+          return;
         }
+
+        if (typeof SHELLY_AUTO_REFRESH_INTERVAL !== 'number'
+          || !Number.isFinite(SHELLY_AUTO_REFRESH_INTERVAL)
+          || SHELLY_AUTO_REFRESH_INTERVAL <= 0
+        ) {
+          return;
+        }
+
+        if (typeof document.visibilityState === 'string'
+          && document.visibilityState !== 'visible'
+        ) {
+          return;
+        }
+
+        shellyRefreshTimer = window.setInterval(() => {
+          ensureShellyDataLoaded(false);
+        }, SHELLY_AUTO_REFRESH_INTERVAL);
       };
 
       const toggleShellyDevice = (deviceId, action) => {
@@ -1056,6 +1086,7 @@ $streamInterval = getStatusStreamInterval();
       function handleTabActivation(tabId, fromUser) {
         if (tabId === SHELLY_TAB_ID) {
           if (shellyConfigError) {
+            stopShellyAutoRefresh();
             setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
             setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
             if (elements.shellyReload) {
@@ -1066,6 +1097,7 @@ $streamInterval = getStatusStreamInterval();
           }
 
           if (!supportsFetch) {
+            stopShellyAutoRefresh();
             setShellyError('Sterowanie Shelly wymaga przeglądarki obsługującej funkcję fetch.');
             setShellyMessage('Sterowanie Shelly wymaga nowszej przeglądarki.');
             if (elements.shellyReload) {
@@ -1080,11 +1112,11 @@ $streamInterval = getStatusStreamInterval();
             elements.shellyReload.removeAttribute('aria-disabled');
           }
 
-          if (fromUser) {
-            ensureShellyDataLoaded(false);
-          } else {
-            ensureShellyDataLoaded(false);
-          }
+          ensureShellyDataLoaded(false);
+          startShellyAutoRefresh();
+        }
+        if (tabId !== SHELLY_TAB_ID) {
+          stopShellyAutoRefresh();
         }
       }
 
@@ -2391,6 +2423,7 @@ $streamInterval = getStatusStreamInterval();
       renderShellyDevices();
 
       if (shellyConfigError) {
+        stopShellyAutoRefresh();
         setShellyError(SHELLY_CONFIG_ERROR_MESSAGE);
         setShellyMessage(SHELLY_CONFIG_ERROR_HINT);
         if (elements.shellyList) {
@@ -2481,11 +2514,16 @@ $streamInterval = getStatusStreamInterval();
           } else if (supportsFetch && !refreshTimer) {
             startPolling();
           }
+          if (currentTab === SHELLY_TAB_ID) {
+            ensureShellyDataLoaded(false);
+            startShellyAutoRefresh();
+          }
         } else {
           if (supportsEventSource) {
             stopStream();
           }
           stopPolling();
+          stopShellyAutoRefresh();
         }
       });
     })();
