@@ -669,10 +669,13 @@ $streamInterval = getStatusStreamInterval();
             card.classList.add('is-busy');
           }
 
+          const body = document.createElement('div');
+          body.className = 'shelly-device__body';
+
           const title = document.createElement('h3');
           title.className = 'shelly-device__title';
           title.textContent = device.label || device.id;
-          card.appendChild(title);
+          body.appendChild(title);
 
           const stateLine = document.createElement('p');
           stateLine.className = 'shelly-device__state';
@@ -682,14 +685,16 @@ $streamInterval = getStatusStreamInterval();
           stateValue.textContent = formatShellyStateLabel(device.state);
           stateLine.textContent = 'Stan: ';
           stateLine.appendChild(stateValue);
-          card.appendChild(stateLine);
+          body.appendChild(stateLine);
 
           if (device.description) {
             const description = document.createElement('p');
             description.className = 'shelly-device__description';
             description.textContent = device.description;
-            card.appendChild(description);
+            body.appendChild(description);
           }
+
+          card.appendChild(body);
 
           const actions = document.createElement('div');
           actions.className = 'shelly-device__actions';
