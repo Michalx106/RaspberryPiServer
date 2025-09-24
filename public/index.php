@@ -507,6 +507,63 @@ $streamInterval = getStatusStreamInterval();
 
       let shellyRefreshTimer = null;
 
+      const markShellyListIdle = () => {
+        const container = elements.shellyList;
+        if (!container) {
+          return;
+        }
+
+        container.classList.remove('is-refreshing');
+        if (!shellyState.loading) {
+          container.classList.remove('is-loading');
+        }
+        container.setAttribute('aria-busy', 'false');
+      };
+
+      const haveShellyDevicesChanged = (previousDevices, nextDevices) => {
+        if (!Array.isArray(previousDevices) || !Array.isArray(nextDevices)) {
+          return true;
+        }
+
+        if (previousDevices.length !== nextDevices.length) {
+          return true;
+        }
+
+        const previousById = new Map();
+        previousDevices.forEach((device) => {
+          if (device && typeof device.id === 'string') {
+            previousById.set(device.id, device);
+          }
+        });
+
+        if (previousById.size !== nextDevices.length) {
+          return true;
+        }
+
+        for (const device of nextDevices) {
+          if (!device || typeof device.id !== 'string') {
+            return true;
+          }
+
+          const previous = previousById.get(device.id);
+          if (!previous) {
+            return true;
+          }
+
+          if (
+            previous.label !== device.label
+            || previous.state !== device.state
+            || previous.description !== device.description
+            || previous.ok !== device.ok
+            || previous.error !== device.error
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      };
+
       const setShellyError = (message) => {
         if (!elements.shellyError) {
           return;
@@ -757,6 +814,7 @@ $streamInterval = getStatusStreamInterval();
           return;
         }
 
+        const errorBeforeRequest = shellyState.error;
         const requestId = shellyState.requestId + 1;
         shellyState.requestId = requestId;
         shellyState.loading = true;
@@ -813,11 +871,14 @@ $streamInterval = getStatusStreamInterval();
               return;
             }
 
+            const previousDevices = shellyState.devices;
+            const previousHasErrors = shellyState.hasErrors;
+            const previousError = errorBeforeRequest;
             const devicesData = payload && typeof payload === 'object' && Array.isArray(payload.devices)
               ? payload.devices
               : [];
 
-            shellyState.devices = devicesData.map((entry, index) => {
+            const normalizedDevices = devicesData.map((entry, index) => {
               let id = '';
               if (entry && typeof entry === 'object') {
                 if (typeof entry.id === 'string' && entry.id.trim() !== '') {
@@ -871,6 +932,9 @@ $streamInterval = getStatusStreamInterval();
               };
             });
 
+            const devicesChanged = haveShellyDevicesChanged(previousDevices, normalizedDevices);
+            shellyState.devices = normalizedDevices;
+
             let hasErrors = false;
             if (payload && typeof payload === 'object' && typeof payload.hasErrors === 'boolean') {
               hasErrors = payload.hasErrors;
@@ -886,7 +950,11 @@ $streamInterval = getStatusStreamInterval();
             shellyState.lastUpdated = generatedAt !== '' && generatedAt !== null ? generatedAt : shellyState.lastAttempt;
             shellyState.error = null;
             shellyState.loading = false;
-            renderShellyDevices();
+            if (devicesChanged || previousHasErrors !== shellyState.hasErrors || previousError !== shellyState.error) {
+              renderShellyDevices();
+            } else {
+              markShellyListIdle();
+            }
             updateShellyLastUpdate();
           })
           .catch((error) => {
@@ -895,13 +963,18 @@ $streamInterval = getStatusStreamInterval();
             }
 
             shellyState.loading = false;
-            shellyState.devices = [];
+            const hadDevices = Array.isArray(shellyState.devices) && shellyState.devices.length > 0;
             shellyState.hasErrors = false;
             const message = error && typeof error.message === 'string' && error.message.trim() !== ''
               ? error.message.trim()
               : 'Nie udało się pobrać listy urządzeń Shelly.';
             shellyState.error = message;
-            renderShellyDevices();
+            if (hadDevices) {
+              setShellyError(message);
+              markShellyListIdle();
+            } else {
+              renderShellyDevices();
+            }
             updateShellyLastUpdate();
           });
       };
