@@ -267,7 +267,7 @@ $streamInterval = getStatusStreamInterval();
       const HISTORY_DEFAULT_METRIC = 'cpuTemperature';
       const SHELLY_LIST_ENDPOINT = '?shelly=list';
       const SHELLY_COMMAND_ENDPOINT = '?shelly=command';
-      const SHELLY_AUTO_REFRESH_INTERVAL = 15000;
+      const SHELLY_AUTO_REFRESH_INTERVAL = 1000;
       const STATUS_TAB_ID = 'status';
       const SHELLY_TAB_ID = 'shelly';
       const TAB_STORAGE_KEY = 'dashboard-active-tab';
