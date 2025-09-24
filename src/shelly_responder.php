@@ -33,37 +33,28 @@ function handleShellyRequest(array $devices): bool
 
 /**
  * @param array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $devices
+ * @return array{payload: array<string, mixed>, statusCode: int}
  */
-function respondWithShellyList(array $devices): void
+function buildShellyListPayload(array $devices, bool $configError = false): array
 {
-    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-    if (strtoupper($method) !== 'GET') {
-        header('Allow: GET');
-        sendShellyJsonResponse([
-            'error' => 'method_not_allowed',
-            'message' => 'Ten endpoint obsługuje wyłącznie zapytania GET.',
-        ], 405);
-        return;
-    }
-
-    if (!ensureShellyRequestSecurity()) {
-        return;
-    }
+    $payload = [
+        'generatedAt' => date(DATE_ATOM),
+        'count' => 0,
+        'hasErrors' => false,
+        'devices' => [],
+        'configError' => $configError,
+    ];
 
     if (!function_exists('curl_init')) {
-        sendShellyJsonResponse([
-            'generatedAt' => date(DATE_ATOM),
-            'count' => 0,
-            'hasErrors' => true,
-            'error' => 'environment:missing_curl',
-            'message' => 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.',
-            'devices' => [],
-        ], 500);
-        return;
-    }
+        $payload['hasErrors'] = true;
+        $payload['error'] = 'environment:missing_curl';
+        $payload['message'] = 'Obsługa Shelly wymaga zainstalowania rozszerzenia PHP php-curl.';
 
-    $items = [];
-    $hasErrors = false;
+        return [
+            'payload' => $payload,
+            'statusCode' => 500,
+        ];
+    }
 
     $normalizedDevices = [];
 
@@ -77,7 +68,16 @@ function respondWithShellyList(array $devices): void
         $normalizedDevices[(string) $deviceId] = $deviceConfig;
     }
 
+    if (count($normalizedDevices) === 0) {
+        return [
+            'payload' => $payload,
+            'statusCode' => 200,
+        ];
+    }
+
     $statuses = fetchShellyStatusesBatch($normalizedDevices);
+    $items = [];
+    $hasErrors = false;
 
     foreach ($normalizedDevices as $deviceId => $deviceConfig) {
         $status = $statuses[$deviceId] ?? buildShellyResponse(
@@ -102,12 +102,37 @@ function respondWithShellyList(array $devices): void
         }
     }
 
-    sendShellyJsonResponse([
-        'generatedAt' => date(DATE_ATOM),
-        'count' => count($items),
-        'hasErrors' => $hasErrors,
-        'devices' => $items,
-    ]);
+    $payload['count'] = count($items);
+    $payload['devices'] = $items;
+    $payload['hasErrors'] = $hasErrors;
+
+    return [
+        'payload' => $payload,
+        'statusCode' => 200,
+    ];
+}
+
+/**
+ * @param array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $devices
+ */
+function respondWithShellyList(array $devices): void
+{
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    if (strtoupper($method) !== 'GET') {
+        header('Allow: GET');
+        sendShellyJsonResponse([
+            'error' => 'method_not_allowed',
+            'message' => 'Ten endpoint obsługuje wyłącznie zapytania GET.',
+        ], 405);
+        return;
+    }
+
+    if (!ensureShellyRequestSecurity()) {
+        return;
+    }
+
+    $result = buildShellyListPayload($devices);
+    sendShellyJsonResponse($result['payload'], $result['statusCode']);
 }
 
 /**
