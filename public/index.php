@@ -72,7 +72,7 @@ if (handleShellyRequest($shellyDevices)) {
     return;
 }
 
-if (handleStatusRequest($statusParam, $servicesToCheck)) {
+if (handleStatusRequest($statusParam, $servicesToCheck, $shellyDevices, $shellyConfigError)) {
     return;
 }
 

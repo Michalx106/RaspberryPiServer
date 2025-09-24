@@ -5,9 +5,14 @@ declare(strict_types=1);
  * Obsługuje parametry zapytań statusu.
  *
  * @param array<string, string> $servicesToCheck
+ * @param array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $shellyDevices
  */
-function handleStatusRequest(?string $statusParam, array $servicesToCheck): bool
-{
+function handleStatusRequest(
+    ?string $statusParam,
+    array $servicesToCheck,
+    array $shellyDevices = [],
+    bool $shellyConfigError = false
+): bool {
     switch ($statusParam) {
         case 'json':
             respondWithStatusJson($servicesToCheck);
@@ -17,6 +22,10 @@ function handleStatusRequest(?string $statusParam, array $servicesToCheck): bool
             return true;
         case 'history':
             respondWithStatusHistory();
+            return true;
+        case 'ios':
+        case 'app':
+            respondWithStatusBundle($servicesToCheck, $shellyDevices, $shellyConfigError);
             return true;
         default:
             return false;
@@ -44,6 +53,72 @@ function respondWithStatusJson(array $servicesToCheck): void
     }
 
     echo $payload;
+}
+
+/**
+ * Zwraca paczkę danych do wykorzystania przez aplikację mobilną.
+ *
+ * @param array<string, string> $servicesToCheck
+ * @param array<string, array{label: string, host: string, relayId?: int, authKey?: string, username?: string, password?: string}> $shellyDevices
+ */
+function respondWithStatusBundle(array $servicesToCheck, array $shellyDevices, bool $shellyConfigError): void
+{
+    $snapshot = collectStatusSnapshot($servicesToCheck);
+    $historyConfig = getStatusHistoryConfig();
+    $historyLimit = resolveHistoryLimitFromRequest();
+    $historyEntries = $historyConfig['enabled'] ? loadStatusHistory($historyLimit) : [];
+
+    $historyPayload = [
+        'generatedAt' => date(DATE_ATOM),
+        'enabled' => $historyConfig['enabled'],
+        'maxEntries' => $historyConfig['maxEntries'],
+        'maxAge' => $historyConfig['maxAge'],
+        'count' => count($historyEntries),
+        'entries' => $historyEntries,
+    ];
+
+    if ($historyLimit !== null) {
+        $historyPayload['limit'] = $historyLimit;
+    }
+
+    $shellyResult = buildShellyListPayload($shellyDevices, $shellyConfigError);
+    $shellyPayload = $shellyResult['payload'];
+    $shellyPayload['httpStatus'] = $shellyResult['statusCode'];
+
+    $payload = [
+        'generatedAt' => date(DATE_ATOM),
+        'streamInterval' => getStatusStreamInterval(),
+        'snapshot' => $snapshot,
+        'history' => $historyPayload,
+        'shelly' => $shellyPayload,
+    ];
+
+    $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    if ($encoded === false) {
+        $errorPayload = json_encode([
+            'error' => json_last_error_msg() ?: 'Nie można zakodować danych pakietu',
+            'generatedAt' => date(DATE_ATOM),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($errorPayload === false) {
+            $errorPayload = '{"error":"Nie można zakodować danych pakietu"}';
+        }
+
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        http_response_code(500);
+        echo $errorPayload;
+
+        return;
+    }
+
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    http_response_code(200);
+    echo $encoded;
 }
 
 /**
@@ -138,6 +213,19 @@ function streamStatus(array $servicesToCheck): void
     }
 }
 
+function resolveHistoryLimitFromRequest(): ?int
+{
+    $limitParam = $_GET['limit'] ?? null;
+    if (is_string($limitParam) && is_numeric($limitParam)) {
+        $limitValue = (int) $limitParam;
+        if ($limitValue > 0) {
+            return $limitValue;
+        }
+    }
+
+    return null;
+}
+
 /**
  * Zwraca historię snapshotów w formacie JSON.
  */
@@ -145,14 +233,7 @@ function respondWithStatusHistory(): void
 {
     $config = getStatusHistoryConfig();
 
-    $limit = null;
-    $limitParam = $_GET['limit'] ?? null;
-    if (is_string($limitParam) && is_numeric($limitParam)) {
-        $limitValue = (int) $limitParam;
-        if ($limitValue > 0) {
-            $limit = $limitValue;
-        }
-    }
+    $limit = resolveHistoryLimitFromRequest();
 
     $entries = $config['enabled'] ? loadStatusHistory($limit) : [];
 

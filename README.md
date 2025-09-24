@@ -180,6 +180,30 @@ Odpowiedź zawiera m.in. pola `enabled`, `maxEntries`, `maxAge`, `count` oraz ta
 z uporządkowanymi rekordami historii (z wartościami liczbowymi i etykietami). Możesz zawęzić liczbę
 zwracanych elementów parametrem `limit`, np. `?status=history&limit=120`.
 
+### Pakiet danych dla aplikacji mobilnych
+
+Jeżeli chcesz odtworzyć zawartość panelu w aplikacji mobilnej (np. na iOS), możesz pobrać wszystkie
+potrzebne informacje jednym zapytaniem:
+
+```
+GET /index.php?status=ios
+```
+
+Alias `status=app` działa identycznie. Odpowiedź JSON zawiera:
+
+- `generatedAt` oraz `streamInterval` – sygnaturę czasową odpowiedzi oraz interwał SSE wykorzystywany
+  przez panel WWW,
+- `snapshot` – bieżący stan urządzenia w takim samym formacie jak `?status=json`,
+- `history` – blok z konfiguracją i rekordami historii; możesz ograniczyć liczbę zwracanych wpisów
+  parametrem `limit`, identycznie jak w dedykowanym endpointzie historii,
+- `shelly` – listę urządzeń Shelly wraz z informacjami o ewentualnych błędach (`hasErrors`), flagą
+  `configError` informującą o problemach z konfiguracją oraz statusem HTTP (`httpStatus`) z jakim
+  odpowiedziałby samodzielny endpoint `?shelly=list`.
+
+Dodatkowe pola `error` i `message` pojawiają się, gdy na serwerze brakuje rozszerzenia `php-curl`
+lub wystąpił inny błąd środowiskowy. Pakiet korzysta z tej samej autoryzacji HTTP Basic co interfejs
+przeglądarkowy.
+
 ### Wykres w interfejsie
 
 Front-end rysuje wykresy metryk (domyślnie temperatury CPU) z wykorzystaniem elementu SVG
