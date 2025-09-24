@@ -587,6 +587,17 @@ $streamInterval = getStatusStreamInterval();
           return;
         }
 
+        const hasDevices = shellyState.devices.length > 0;
+
+        if (shellyState.loading && hasDevices) {
+          container.classList.remove('is-loading');
+          container.classList.add('is-refreshing');
+          container.setAttribute('aria-busy', 'true');
+          updateShellyLastUpdate();
+          return;
+        }
+
+        container.classList.remove('is-refreshing');
         container.innerHTML = '';
 
         if (shellyState.loading) {
