@@ -231,6 +231,10 @@ footer {
   min-height: 80px;
 }
 
+.shelly-list.is-refreshing .shelly-device {
+  opacity: 0.95;
+}
+
 .shelly-loading,
 .shelly-empty {
   background: var(--metric-background);
@@ -246,7 +250,7 @@ footer {
   border-radius: 12px;
   padding: 16px;
   box-shadow: inset 0 0 0 1px var(--panel-border);
-  transition: box-shadow 0.2s ease, transform 0.1s ease;
+  transition: box-shadow 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
 }
 
 .shelly-device:hover {
