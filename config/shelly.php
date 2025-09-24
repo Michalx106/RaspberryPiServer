@@ -55,6 +55,5 @@ $buildDevice = static function (string $id, string $label, string $defaultHost, 
 
 return [
     // Zmień adresy hostów na odpowiadające Twojej sieci lokalnej lub ustaw zmienne środowiskowe APP_SHELLY_<ID>_HOST.
-    'boiler' => $buildDevice('boiler', 'Podgrzewacz wody', 'http://192.168.0.10'),
-    'gate' => $buildDevice('gate', 'Brama wjazdowa', 'http://192.168.0.11'),
+    'light' => $buildDevice('light', 'Światło Michał Pokój', 'http://192.168.0.122'),
 ];
