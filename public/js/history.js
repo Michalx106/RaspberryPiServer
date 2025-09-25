@@ -675,7 +675,7 @@ const renderHistoryChart = (elements, entries, metricId) => {
     const dot = createSvgElement('circle', {
       cx: point.x,
       cy: point.y,
-      r: 4,
+      r: 1,
       class: 'history-dot',
     });
     dotsGroup.appendChild(dot);
