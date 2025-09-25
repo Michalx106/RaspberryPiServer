@@ -291,8 +291,20 @@ export function createShellyController(elements, options = {}) {
       actionButton.dataset.role = 'shelly-action';
       actionButton.dataset.deviceId = device.id;
       actionButton.dataset.action = nextAction;
-      actionButton.textContent = nextAction === 'on' ? 'Włącz' : 'Wyłącz';
       actionButton.className = 'shelly-device__action';
+
+      const actionLabel = nextAction === 'on' ? 'Włącz' : 'Wyłącz';
+      actionButton.setAttribute('aria-label', actionLabel);
+      actionButton.title = actionLabel;
+
+      const icon = document.createElement('span');
+      icon.className = 'icon-power';
+      actionButton.appendChild(icon);
+
+      const srLabel = document.createElement('span');
+      srLabel.className = 'sr-only';
+      srLabel.textContent = actionLabel;
+      actionButton.appendChild(srLabel);
 
       if (!supportsFetch || configError) {
         actionButton.disabled = true;
