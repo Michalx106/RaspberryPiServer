@@ -284,7 +284,7 @@ footer {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-top: 16px;
 }
 
 .shelly-last-update {
@@ -694,6 +694,7 @@ footer {
   cursor: pointer;
   transition: background 0.2s ease, transform 0.1s ease;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .status-refresh button:hover,
