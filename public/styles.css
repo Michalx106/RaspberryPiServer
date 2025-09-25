@@ -521,6 +521,7 @@ footer {
 @media (max-width: 700px) {
   .shelly-device {
     flex-direction: column;
+    gap: 12px;
   }
 
   .shelly-device__actions {
@@ -529,10 +530,15 @@ footer {
     max-width: none;
     margin-left: 0;
     min-width: 0;
+    justify-content: center;
   }
 
   .shelly-device__action {
-    min-height: 140px;
+    min-height: 120px;
+  }
+
+  .shelly-device__action .icon-power {
+    font-size: 3.2rem;
   }
 }
 
@@ -980,12 +986,13 @@ footer {
   }
 
   .shelly-device__action {
-    min-height: 150px;
-    padding: 12px;
+    min-height: 110px;
+    padding: 10px;
+    border-radius: 14px;
   }
 
   .shelly-device__action .icon-power {
-    font-size: 4.2rem;
+    font-size: 2.9rem;
   }
 
   .metric {
