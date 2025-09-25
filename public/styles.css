@@ -396,10 +396,10 @@ footer {
   justify-content: flex-end;
   margin: 0;
   align-self: stretch;
-  min-width: 220px;
-  flex: 1 1 320px;
+  flex: 1 1 clamp(200px, 35vw, 320px);
+  max-width: clamp(220px, 40vw, 360px);
   margin-left: auto;
-
+  min-width: 0;
 }
 
 
@@ -410,9 +410,8 @@ footer {
   justify-content: center;
   width: 100%;
   height: 100%;
-  min-height: 160px;
-
-  padding: 0;
+  min-height: clamp(96px, 20vw, 140px);
+  padding: clamp(8px, 2vw, 14px);
   border: none;
   border-radius: 16px;
   background: var(--button-background);
@@ -467,7 +466,7 @@ footer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 3.6rem;
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
   line-height: 1;
   pointer-events: none;
   transition: transform 0.25s ease;
@@ -534,11 +533,7 @@ footer {
   }
 
   .shelly-device__action {
-    min-height: 120px;
-  }
-
-  .shelly-device__action .icon-power {
-    font-size: 3.2rem;
+    min-height: clamp(90px, 26vw, 120px);
   }
 }
 
