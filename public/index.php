@@ -229,13 +229,13 @@ $streamInterval = getStatusStreamInterval();
   <section class="shelly-panel tab-panel" data-role="tab-panel" data-tab-panel="shelly" id="panel-shelly" role="tabpanel" aria-labelledby="tab-shelly" data-shelly-config-error="<?= $shellyConfigError ? 'true' : 'false'; ?>" hidden>
     <h2>Urządzenia Shelly</h2>
     <p class="shelly-intro">Steruj przekaźnikami Shelly dostępnych w Twojej sieci domowej bezpośrednio z tego panelu.</p>
-    <div class="shelly-toolbar">
-      <button type="button" data-role="shelly-reload">Odśwież listę</button>
-      <span class="shelly-last-update" data-role="shelly-last-update"></span>
-    </div>
     <p class="shelly-error" data-role="shelly-error" hidden></p>
     <p class="shelly-message" data-role="shelly-message">Przełącz na kartę „Shelly”, aby pobrać stan urządzeń.</p>
     <div class="shelly-list" data-role="shelly-list" aria-live="polite" aria-busy="false"></div>
+    <div class="shelly-toolbar">
+      <span class="shelly-last-update" data-role="shelly-last-update"></span>
+      <button type="button" data-role="shelly-reload">Odśwież listę</button>
+    </div>
   </section>
 
   <footer>
