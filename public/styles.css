@@ -930,7 +930,12 @@ footer {
   }
 
   .shelly-device__action {
-    min-height: 120px;
+    min-height: 150px;
+    padding: 12px;
+  }
+
+  .shelly-device__action .icon-power {
+    font-size: 4.2rem;
   }
 
   .metric {
