@@ -12,6 +12,13 @@ body {
   --background: #e9eef5;
   --text-primary: #1d2433;
   --heading-primary: #0066cc;
+  --brand-title: #1d2433;
+  --brand-title-shadow: rgba(0, 0, 0, 0.08);
+  --logo-pi: #1d2433;
+  --logo-window: #ffffff;
+  --logo-berry: #d63a4c;
+  --logo-berry-highlight: rgba(255, 255, 255, 0.65);
+  --logo-leaf: #2f9e44;
   --panel-background: #ffffff;
   --panel-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
   --panel-heading: #0b5394;
@@ -66,6 +73,13 @@ body.theme-dark {
   --background: #050505;
   --text-primary: #f2f2f2;
   --heading-primary: #fafafa;
+  --brand-title: #f6f6f6;
+  --brand-title-shadow: rgba(0, 0, 0, 0.4);
+  --logo-pi: #f5f5f5;
+  --logo-window: #1d2433;
+  --logo-berry: #ff6b6b;
+  --logo-berry-highlight: rgba(255, 255, 255, 0.75);
+  --logo-leaf: #63e68a;
   --panel-background: #111111;
   --panel-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
   --panel-heading: #f5f5f5;
@@ -135,8 +149,44 @@ h1 {
   margin-bottom: 16px;
 }
 
-.page-header h1 {
+.page-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
   margin: 0;
+}
+
+.page-brand__logo {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.page-brand__pi {
+  fill: var(--logo-pi);
+}
+
+.page-brand__windows rect {
+  fill: var(--logo-window);
+}
+
+.page-brand__berry circle {
+  fill: var(--logo-berry);
+}
+
+.page-brand__berry-highlight {
+  fill: var(--logo-berry-highlight);
+}
+
+.page-brand__leaf {
+  fill: var(--logo-leaf);
+}
+
+.page-brand__title {
+  font-size: clamp(30px, 4vw, 40px);
+  font-weight: 700;
+  color: var(--brand-title);
+  text-shadow: 0 2px 6px var(--brand-title-shadow);
 }
 
 .theme-toggle--top {

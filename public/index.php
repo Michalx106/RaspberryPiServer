@@ -126,7 +126,23 @@ $streamInterval = getStatusStreamInterval();
 <body data-csrf-token="<?= h($csrfToken); ?>" data-stream-interval="<?= h((string) $streamInterval); ?>">
   <div class="page-wrapper">
   <div class="page-header">
-    <h1>Witaj na mojej stronie! 🎉</h1>
+    <h1 class="page-brand" aria-label="RoomPi">
+      <svg class="page-brand__logo" viewBox="0 0 64 64" role="img" aria-labelledby="roompi-logo-title roompi-logo-desc">
+        <title id="roompi-logo-title">Logo RoomPi</title>
+        <desc id="roompi-logo-desc">Symbol pi with a raspberry in the middle representing the RoomPi project.</desc>
+        <path class="page-brand__pi" d="M8 12h48v9H40v31h-8V21H24v31h-8V21H8z"/>
+        <g class="page-brand__windows">
+          <rect x="18" y="27" width="6" height="10" rx="1" />
+          <rect x="40" y="27" width="6" height="10" rx="1" />
+        </g>
+        <g class="page-brand__berry">
+          <circle cx="32" cy="32" r="11" />
+          <circle class="page-brand__berry-highlight" cx="28.5" cy="27" r="4" />
+          <path class="page-brand__leaf" d="M32 18c3.8 0 6.6-2.4 7.7-5.7a9.9 9.9 0 0 0-7.7 3.7 9.9 9.9 0 0 0-7.7-3.7C25.4 15.6 28.2 18 32 18z" />
+        </g>
+      </svg>
+      <span class="page-brand__title">RoomPi</span>
+    </h1>
     <div class="theme-toggle theme-toggle--top">
       <button type="button" data-role="theme-toggle" aria-pressed="false">Włącz tryb ciemny</button>
     </div>
