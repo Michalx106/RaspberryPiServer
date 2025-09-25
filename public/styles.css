@@ -1,3 +1,13 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: #e9eef5;
+}
+
 body {
   --background: #e9eef5;
   --text-primary: #1d2433;
@@ -40,13 +50,16 @@ body {
   --panel-border: #d8e2f1;
   --outer-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
   font-family: Arial, sans-serif;
-  max-width: 900px;
-  margin: 40px auto;
-  background: var(--background);
+  line-height: 1.5;
   color: var(--text-primary);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: var(--outer-shadow);
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 32px 16px 40px;
 }
 
 body.theme-dark {
@@ -92,6 +105,23 @@ body.theme-dark {
   --outer-shadow: 0 0 20px rgba(0, 0, 0, 0.85);
 }
 
+.page-wrapper {
+  width: 100%;
+  max-width: 960px;
+  width: min(960px, 100%);
+  background: var(--panel-background);
+  border-radius: 16px;
+  box-shadow: var(--outer-shadow);
+  padding: 32px 28px 40px;
+  margin: 0 auto;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+}
+
 h1 {
   color: var(--heading-primary);
 }
@@ -115,12 +145,14 @@ h1 {
 
 p {
   font-size: 18px;
+  margin-top: 0;
 }
 
 footer {
   margin-top: 40px;
   font-size: 14px;
   color: var(--footer-text);
+  text-align: center;
 }
 
 .status-panel {
@@ -142,6 +174,7 @@ footer {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  scroll-padding: 0 16px;
 }
 
 .tab-button {
@@ -224,7 +257,7 @@ footer {
 .shelly-list {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .shelly-list.is-loading {
@@ -456,7 +489,7 @@ footer {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -585,6 +618,11 @@ footer {
   gap: 12px;
 }
 
+.status-refresh span {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
 .status-refresh.is-loading {
   opacity: 0.85;
 }
@@ -604,6 +642,7 @@ footer {
   font-size: 13px;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.1s ease;
+  flex-shrink: 0;
 }
 
 .status-refresh button:hover,
@@ -753,4 +792,148 @@ footer {
   margin-top: 12px;
   font-size: 14px;
   color: var(--status-note);
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 28px 18px 32px;
+  }
+
+  .page-wrapper {
+    padding: 28px 20px 32px;
+  }
+
+  .page-header {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 20px 12px 28px;
+  }
+
+  .page-wrapper {
+    padding: 24px 18px 30px;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .theme-toggle--top {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .theme-toggle--top button {
+    width: 100%;
+  }
+
+  .tab-navigation {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-left: -18px;
+    margin-right: -18px;
+    padding: 0 18px;
+  }
+
+  .tab-button {
+    flex: 0 0 auto;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .shelly-toolbar {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .shelly-toolbar button {
+    flex: 1 1 auto;
+  }
+
+  .shelly-list {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .panel-footer {
+    justify-content: flex-start;
+  }
+
+  .status-refresh {
+    width: 100%;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .service-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .status-refresh {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .status-refresh span {
+    min-width: 0;
+  }
+
+  .status-refresh button,
+  .theme-toggle button,
+  .shelly-toolbar button {
+    width: 100%;
+  }
+
+  .history-chart {
+    height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 14px 10px 20px;
+  }
+
+  .page-wrapper {
+    padding: 20px 14px 24px;
+  }
+
+  h1 {
+    font-size: 1.9rem;
+  }
+
+  p {
+    font-size: 16px;
+  }
+
+  .tab-navigation {
+    gap: 10px;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding: 0 14px;
+  }
+
+  .shelly-device__action {
+    min-height: 120px;
+  }
+
+  .metric {
+    padding: 14px;
+  }
 }

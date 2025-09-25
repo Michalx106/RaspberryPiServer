@@ -119,10 +119,12 @@ $streamInterval = getStatusStreamInterval();
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Moja strona na Raspberry Pi</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-csrf-token="<?= h($csrfToken); ?>" data-stream-interval="<?= h((string) $streamInterval); ?>">
+  <div class="page-wrapper">
   <div class="page-header">
     <h1>Witaj na mojej stronie! 🎉</h1>
     <div class="theme-toggle theme-toggle--top">
@@ -224,6 +226,7 @@ $streamInterval = getStatusStreamInterval();
     <p>Miłego dnia! 😊</p>
   </footer>
 
+  </div>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
