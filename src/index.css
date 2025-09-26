@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-panel-bg: 240 240 244;
+  --color-panel-card: 255 255 255;
+  --color-panel-text: 26 32 44;
+  --color-panel-accent: 34 197 94;
+  --color-panel-muted: 148 163 184;
+}
+
+:root.dark {
+  --color-panel-bg: 15 23 42;
+  --color-panel-card: 30 41 59;
+  --color-panel-text: 226 232 240;
+  --color-panel-accent: 74 222 128;
+  --color-panel-muted: 148 163 184;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.theme-transition {
+  transition-property: background-color, color, border-color, fill, stroke;
+  transition-duration: 300ms;
+  transition-timing-function: ease-in-out;
+}
+
+.card {
+  @apply rounded-2xl bg-panel-card/90 p-6 shadow-lg backdrop-blur transition;
+}
+
+.section-title {
+  @apply text-lg font-semibold text-panel-text;
+}
+
+.metric-label {
+  @apply text-sm font-medium text-panel-muted;
+}
+
+.metric-value {
+  @apply text-2xl font-semibold tracking-tight text-panel-text;
+}
