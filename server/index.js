@@ -2,7 +2,8 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createBundle } from './mockData.js';
+import { getHistory, getSnapshot } from './systemMonitor.js';
+import { getShelly } from './mockData.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -11,30 +12,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 
-let cache = createBundle();
-let lastGenerated = Date.now();
-
-const ensureFreshData = () => {
-  const now = Date.now();
-  if (now - lastGenerated > 5000) {
-    cache = createBundle();
-    lastGenerated = now;
+app.get('/api/snapshot', async (req, res, next) => {
+  try {
+    const snapshot = await getSnapshot();
+    res.json(snapshot);
+  } catch (error) {
+    next(error);
   }
-};
-
-app.get('/api/snapshot', (req, res) => {
-  ensureFreshData();
-  res.json(cache.snapshot);
 });
 
-app.get('/api/history', (req, res) => {
-  ensureFreshData();
-  res.json(cache.history);
+app.get('/api/history', async (req, res, next) => {
+  try {
+    const history = await getHistory();
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/shelly', (req, res) => {
-  ensureFreshData();
-  res.json(cache.shelly);
+  res.json(getShelly());
 });
 
 app.use(express.static(distPath));
