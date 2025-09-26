@@ -1,8 +1,6 @@
-# PHP / web
-vendor/
 node_modules/
-.env
-*.log
-.cache/
+dist/
+tsconfig.tsbuildinfo
+.idea/
 .DS_Store
-Thumbs.db
+npm-debug.log*
